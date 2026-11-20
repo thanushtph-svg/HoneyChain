@@ -1,0 +1,79 @@
+# Testing
+
+## 1. Test inventory and latest results
+
+| Suite | Command (from project root) | Tests | Result | What it proves |
+|---|---|---|---|---|
+| PostgreSQL schema | `psql -U postgres -d honeychain -v ON_ERROR_STOP=1 -o NUL -f backend\db\tests\schema_tests.sql` | 44 checks | ✅ 44/44 | Constraints, triggers, lifecycle, immutability, privacy of public views (rolls back) |
+| Concurrency (manual) | see §3 | 1 | ✅ | Row lock stops two sessions over-allocating one harvest |
+| Smart contract | `cd blockchain; npx hardhat test` | 8 | ✅ 8/8 | Anchoring, append-only history, access control, documented test vector |
+| AI service | `cd ai-service; python -m pytest -q` | 11 | ✅ 11/11 | Service key, model gating (untrained → no prediction, tampered/mismatched model refused), adulteration I/O validation, Isolation Forest minimum data |
+| Backend unit | `cd backend; npm run test:unit` | 5 | ✅ 5/5 | Canonical JSON + SHA-256 reproduce the documented test vector |
+| Backend end-to-end | `cd backend; npm test` | 21 (incl. unit) | ✅ 21/21 | Auth, server-side RBAC, ownership isolation, full lifecycle, invalid transitions, QR, public privacy, **on-chain verify + tamper → MISMATCH**, AI gating, MongoDB CRUD, anomaly rules, live statistics |
+| Frontend page render | `cd frontend; npm run test:ui` | 33 | ✅ 33/33 | Every page for every role renders with live data, no runtime errors, no error banners |
+| Frontend UI lifecycle | (same command) | 7 | ✅ 7/7 | Every form submitted through the real React components: hive → harvest → batches → lab draft/AI/submit → processing → dispatch/deliver → consumer page |
+| QR decoding (manual) | §4 | 3 | ✅ | Decoded QR images point to `/verify/<their own batch>`, which shows different batch data |
+
+The backend and frontend suites ran with **PostgreSQL 16, a live Hardhat node with the deployed contract, and the live AI service**.
+
+## 2. Where the tests ran, and an honest limitation
+
+The project was built and tested on a Linux build machine. A MongoDB **server** could not be installed there (binary downloads were blocked), so the automated tests used `MONGODB_URI=memory://`, a small in-memory **test double** of the MongoDB driver (`backend/src/db/memoryMongo.js`). It is never used for real deployments, and `/api/v1/health` reports it.
+
+**On Windows with real MongoDB Community, please run once** to confirm validators and indexes against the real server:
+
+```powershell
+cd backend
+npm run db:mongo-init
+$env:TEST_MONGODB_URI = "mongodb://127.0.0.1:27017"
+npm test
+Remove-Item Env:TEST_MONGODB_URI
+```
+
+and in `mongosh`:
+
+```javascript
+use honeychain
+db.getCollectionInfos({ name: "ai_analysis_results" })[0].options.validator   // $jsonSchema present
+db.activity_logs.getIndexes()                                                  // includes public_scan_ttl
+db.ai_analysis_results.insertOne({ analysisType: "WRONG" })                     // must FAIL validation
+```
+
+The UI was verified by rendering the real React pages in jsdom against the live backend, not by clicking through a desktop browser. Please also click through the five-minute demo in the README on your machine.
+
+## 3. Concurrency test (two psql windows)
+
+Window A:
+```sql
+BEGIN;
+INSERT INTO batches (harvest_id, quantity_kg, honey_type, created_by)
+SELECT harvest_id, quantity_kg * 0.6, 'race A', 1 FROM harvests WHERE harvest_code = 'HRV-2026-000003';
+-- do not commit yet
+```
+Window B (blocks, waiting for A's lock):
+```sql
+INSERT INTO batches (harvest_id, quantity_kg, honey_type, created_by)
+SELECT harvest_id, quantity_kg * 0.6, 'race B', 1 FROM harvests WHERE harvest_code = 'HRV-2026-000003';
+```
+Window A: `COMMIT;`. Window B then fails with `HARVEST_OVER_ALLOCATED`. In window A, run `DELETE FROM batches WHERE honey_type='race A';` to clean up (allowed while the batch is CREATED and has no anchor; otherwise reset the demo).
+
+## 4. Manual QR check
+
+1. Log in as a beekeeper, open a batch, and click *Download PNG*.
+2. Scan it with a phone (README §9 for LAN setup). It opens `/verify/<that batch>`.
+3. Repeat with a second batch: the page shows different origin, harvest and status.
+
+## 5. Manual acceptance checklist (project description §14)
+
+| Criterion | How to check | Automated? |
+|---|---|---|
+| Users only access permitted functions | Log in as each role; try `/app/admin/users` as a beekeeper (blocked in the UI **and** the API returns 403) | ✅ tests 10, 11 |
+| Beekeeper: hive → harvest → linked batches | README demo step 2 | ✅ tests 12, UI |
+| Lab report linked to the correct batch | Lab queue → enter results | ✅ |
+| Processor/distributor records with validation | Try shipping more units than packed (rejected) | ✅ |
+| Admin inspects records and flagged inconsistencies | Admin → Records / Anomalies | ✅ |
+| QR shows the correct batch | §4 | ✅ decoded |
+| Anchor + later verification | Admin → Blockchain → Verify; tamper demo | ✅ test 15 |
+| AI returns real output or honest status | Lab report → Run quality (NOT_TRAINED) / adulteration (TRAINED) | ✅ tests 17, 18 |
+| PostgreSQL and MongoDB both used by features | Stats/records (PG); AI, anomalies, logs (Mongo) | ✅ |
+| Starts from documented instructions + seed | README §1–6 | manual |

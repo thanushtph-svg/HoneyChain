@@ -1,0 +1,25 @@
+{
+  "_comment": "Rule-based standards screening (NOT AI). General-honey limits only; special honey types have different limits noted in 'exceptions'. Select the profile with STANDARDS_PROFILE (default FSSAI).",
+  "defaultProfile": "FSSAI",
+  "profiles": {
+    "FSSAI": {
+      "name": "FSSAI (India) honey standard",
+      "source": "FSS (Food Products Standards & Food Additives) Regulations 2011, reg. 2.8.3 as amended (honey standards notified 2018, operationalised 2020); FSSAI advisory 07-Nov-2025 on HMF (max 80 mg/kg)",
+      "checks": [
+        { "parameter": "moisture_pct", "label": "Moisture", "unit": "%", "max": 20.0 },
+        { "parameter": "sucrose_g_100g", "label": "Sucrose", "unit": "g/100 g", "max": 5.0, "exceptions": "10 g/100 g for Carvia callosa and honeydew honey" },
+        { "parameter": "hmf_mg_kg", "label": "HMF", "unit": "mg/kg", "max": 80.0 }
+      ]
+    },
+    "CODEX": {
+      "name": "Codex Alimentarius CXS 12-1981 (Rev. 2001)",
+      "source": "Revised Codex Standard for Honey, CODEX STAN 12-1981, Rev.1 (1987), Rev.2 (2001)",
+      "checks": [
+        { "parameter": "moisture_pct", "label": "Moisture", "unit": "%", "max": 20.0, "exceptions": "23% for heather (Calluna) honey" },
+        { "parameter": "sucrose_g_100g", "label": "Sucrose", "unit": "g/100 g", "max": 5.0, "exceptions": "10 or 15 g/100 g for listed floral sources (e.g. citrus, alfalfa, lavender, borage)" },
+        { "parameter": "hmf_mg_kg", "label": "HMF", "unit": "mg/kg", "max": 40.0, "exceptions": "80 mg/kg for honey of declared tropical origin" },
+        { "parameter": "fructose_plus_glucose", "label": "Fructose + glucose", "unit": "g/100 g", "min": 60.0, "exceptions": "45 g/100 g for honeydew honey" }
+      ]
+    }
+  }
+}

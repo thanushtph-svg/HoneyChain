@@ -1,0 +1,40 @@
+{
+  "name": "honeychain-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "db:migrate": "node db/migrate.js",
+    "db:mongo-init": "node db/mongo-init.js",
+    "db:seed": "node db/seeds/seed.js",
+    "db:reset": "node db/reset.js",
+    "test": "node --test --test-concurrency=1 tests/canonical.test.js tests/workflow.test.js",
+    "test:unit": "node --test tests/canonical.test.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "canonicalize": "^5.1.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.10",
+    "ethers": "^6.17.0",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.5",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "mongodb": "^7.9.1",
+    "multer": "^2.5.0",
+    "pg": "^8.23.1",
+    "qrcode": "^1.5.4",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "supertest": "^7.3.2"
+  }
+}

@@ -1,0 +1,230 @@
+{
+  "summary": {
+    "headline": "Unseen honey products (nested leave-one-product-out), jar level",
+    "jar_balanced_accuracy": 0.8071,
+    "jar_recall_adulterated": 0.9,
+    "jar_specificity_pure": 0.7143,
+    "pure_jars": 7,
+    "adulterated_jars": 50,
+    "seen_product_jar_balanced_accuracy": 0.6343,
+    "note": "Independent HoneyChain evaluation. Not comparable to the >98% accuracy reported by Ahmed (2024), whose split was not product-grouped."
+  },
+  "nested_leave_one_product_out": {
+    "observation_level": {
+      "n": 8525,
+      "positives": 7475,
+      "negatives": 1050,
+      "balanced_accuracy": 0.7529,
+      "precision_adulterated": 0.9444,
+      "recall_adulterated": 0.8706,
+      "f1_adulterated": 0.906,
+      "specificity_pure": 0.6352,
+      "confusion_matrix": {
+        "labels": [
+          "pure(0)",
+          "adulterated(1)"
+        ],
+        "rows_true_cols_pred": [
+          [
+            667,
+            383
+          ],
+          [
+            967,
+            6508
+          ]
+        ]
+      },
+      "roc_auc": 0.8553
+    },
+    "jar_level": {
+      "n": 57,
+      "positives": 50,
+      "negatives": 7,
+      "balanced_accuracy": 0.8071,
+      "precision_adulterated": 0.9574,
+      "recall_adulterated": 0.9,
+      "f1_adulterated": 0.9278,
+      "specificity_pure": 0.7143,
+      "confusion_matrix": {
+        "labels": [
+          "pure(0)",
+          "adulterated(1)"
+        ],
+        "rows_true_cols_pred": [
+          [
+            5,
+            2
+          ],
+          [
+            5,
+            45
+          ]
+        ]
+      },
+      "roc_auc": 0.88
+    },
+    "jar_detection_by_concentration_pct": {
+      "0": {
+        "jars": 7,
+        "flagged_as_adulterated": 2
+      },
+      "5": {
+        "jars": 14,
+        "flagged_as_adulterated": 11
+      },
+      "10": {
+        "jars": 11,
+        "flagged_as_adulterated": 10
+      },
+      "25": {
+        "jars": 12,
+        "flagged_as_adulterated": 12
+      },
+      "50": {
+        "jars": 13,
+        "flagged_as_adulterated": 12
+      }
+    },
+    "chosen_per_fold": [
+      {
+        "test_product": "C10|ManukaUMF15",
+        "chosen": "logreg_snv_d1",
+        "inner_scores": {
+          "logreg_snv_d1": 0.7359,
+          "logreg_snv": 0.6152,
+          "random_forest": 0.5229
+        }
+      },
+      {
+        "test_product": "C10|ManukaUMF20",
+        "chosen": "logreg_snv_d1",
+        "inner_scores": {
+          "logreg_snv_d1": 0.7274,
+          "logreg_snv": 0.6189,
+          "random_forest": 0.5035
+        }
+      },
+      {
+        "test_product": "C10|ManukaUMF5",
+        "chosen": "logreg_snv_d1",
+        "inner_scores": {
+          "logreg_snv_d1": 0.7263,
+          "logreg_snv": 0.6918,
+          "random_forest": 0.5305
+        }
+      },
+      {
+        "test_product": "C10|MultiFloral",
+        "chosen": "logreg_snv_d1",
+        "inner_scores": {
+          "logreg_snv_d1": 0.6764,
+          "logreg_snv": 0.6198,
+          "random_forest": 0.4904
+        }
+      },
+      {
+        "test_product": "C1|Clover",
+        "chosen": "logreg_snv_d1",
+        "inner_scores": {
+          "logreg_snv_d1": 0.601,
+          "logreg_snv": 0.5729,
+          "random_forest": 0.4759
+        }
+      },
+      {
+        "test_product": "C4|ManukaUMF10",
+        "chosen": "logreg_snv_d1",
+        "inner_scores": {
+          "logreg_snv_d1": 0.7418,
+          "logreg_snv": 0.6355,
+          "random_forest": 0.5625
+        }
+      },
+      {
+        "test_product": "C5|ManukaBlend",
+        "chosen": "logreg_snv_d1",
+        "inner_scores": {
+          "logreg_snv_d1": 0.7154,
+          "logreg_snv": 0.6551,
+          "random_forest": 0.5396
+        }
+      },
+      {
+        "test_product": "C7|BorageField",
+        "chosen": "logreg_snv_d1",
+        "inner_scores": {
+          "logreg_snv_d1": 0.6713,
+          "logreg_snv": 0.6131,
+          "random_forest": 0.4759
+        }
+      },
+      {
+        "test_product": "C7|Kamahi",
+        "chosen": "logreg_snv_d1",
+        "inner_scores": {
+          "logreg_snv_d1": 0.6758,
+          "logreg_snv": 0.4976,
+          "random_forest": 0.5272
+        }
+      },
+      {
+        "test_product": "C7|Rewarewa",
+        "chosen": "logreg_snv_d1",
+        "inner_scores": {
+          "logreg_snv_d1": 0.7154,
+          "logreg_snv": 0.6504,
+          "random_forest": 0.5005
+        }
+      },
+      {
+        "test_product": "C8|ManukaBlend",
+        "chosen": "logreg_snv_d1",
+        "inner_scores": {
+          "logreg_snv_d1": 0.7356,
+          "logreg_snv": 0.6663,
+          "random_forest": 0.4714
+        }
+      },
+      {
+        "test_product": "C9|Manuka",
+        "chosen": "logreg_snv_d1",
+        "inner_scores": {
+          "logreg_snv_d1": 0.6877,
+          "logreg_snv": 0.641,
+          "random_forest": 0.5046
+        }
+      }
+    ]
+  },
+  "jar_grouped_seen_products": {
+    "jar_level": {
+      "n": 57,
+      "positives": 50,
+      "negatives": 7,
+      "balanced_accuracy": 0.6343,
+      "precision_adulterated": 0.913,
+      "recall_adulterated": 0.84,
+      "f1_adulterated": 0.875,
+      "specificity_pure": 0.4286,
+      "confusion_matrix": {
+        "labels": [
+          "pure(0)",
+          "adulterated(1)"
+        ],
+        "rows_true_cols_pred": [
+          [
+            3,
+            4
+          ],
+          [
+            8,
+            42
+          ]
+        ]
+      },
+      "roc_auc": 0.8371
+    }
+  },
+  "protocol": "Outer LeaveOneGroupOut(product); inner GroupKFold(4, product) model selection; jar = mean of observation probabilities."
+}

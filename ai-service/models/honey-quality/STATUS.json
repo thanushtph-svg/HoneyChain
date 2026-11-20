@@ -1,0 +1,13 @@
+{
+  "status": "NOT_TRAINED",
+  "reason": "Not trained - validated labelled dataset required. The candidate source (Aykas 2023, Foods 12(3):523) publishes only summary statistics (min/max/mean/SD), not per-sample values, and has no quality-grade labels. Only rule-based standards screening is available.",
+  "investigated": [
+    {
+      "source": "Aykas D.P. (2023) Determination of Possible Adulteration and Quality Assessment in Commercial Honey. Foods 12(3):523. doi:10.3390/foods12030523",
+      "licence": "CC BY 3.0 (article)",
+      "finding": "Data Availability: 'Data is contained within the article.' The article contains summary statistics and calibration-model statistics only; no per-sample table and no supplementary data files. Its only classes are SIMCA 'pure' vs 'suspicious (sucrose > 5%)', i.e. a regulatory threshold rule, not a quality grade.",
+      "decision": "Unsuitable for training. Deriving labels from regulatory limits would only re-learn the threshold rule, which HoneyChain already applies transparently as rule-based screening."
+    }
+  ],
+  "how_to_enable": "Provide a CSV following ai-service/data/README.md (quality section) with real per-sample measurements and a defensible label, then run: python training/train_quality.py --data <file> --label <column> --group <column>"
+}
