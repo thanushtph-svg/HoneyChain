@@ -1,0 +1,101 @@
+{
+  "_comment": "Standards-Based Laboratory Compliance Check rules. Deterministic, not AI. Each parameter limit can depend on the honey category. 'notRecorded' lists parameters the standard sets but the HoneyChain lab form cannot record; they are reported, never assumed to pass.",
+  "rulesetVersion": "2026.11.23",
+  "categories": {
+    "BLOSSOM": "Blossom / nectar honey (any honey not listed separately)",
+    "HONEYDEW": "Honeydew honey",
+    "BLEND_HONEYDEW_BLOSSOM": "Blend of honeydew honey and blossom honey",
+    "CARVIA_CALLOSA": "Carvia callosa honey",
+    "HEATHER": "Heather (Calluna) honey",
+    "CITRUS_ROBINIA_ALFALFA": "Citrus, false acacia (Robinia), alfalfa and other Codex 10 g/100 g sucrose sources",
+    "LAVENDER_BORAGE": "Lavender or borage honey",
+    "TROPICAL_ORIGIN": "Honey of declared origin from a country or region with a tropical ambient temperature"
+  },
+  "plausibleRanges": {
+    "moisture_pct": [10, 30, "% by mass"],
+    "hmf_mg_kg": [0, 1000, "mg/kg"],
+    "sucrose_g_100g": [0, 60, "g/100 g"],
+    "glucose_g_100g": [5, 60, "g/100 g"],
+    "fructose_g_100g": [5, 65, "g/100 g"],
+    "free_acidity_meq_kg": [0, 200, "meq/kg"],
+    "electrical_conductivity_ms_cm": [0.02, 3.0, "mS/cm"]
+  },
+  "profiles": {
+    "FSSAI": {
+      "name": "FSSAI honey standard",
+      "reference": "Food Safety and Standards (Food Products Standards and Food Additives) Regulations, 2011 - Regulation 2.8.3(1)(V) Honey, as amended",
+      "version": "FSSAI Chapter 2.8 compilation (PDF dated 25-May-2023)",
+      "verification": "Limits and honey-type exceptions checked against the text of FSSAI Chapter 2.8 (fssai.gov.in) on 2026-11-23.",
+      "parameters": [
+        { "id": "moisture", "label": "Moisture", "input": "moisture_pct", "unit": "% by mass", "mandatory": true,
+          "rule": { "max": 20.0 },
+          "failAdvice": "High moisture allows fermentation; check for unripe honey or added water." },
+        { "id": "fg_sum", "label": "Fructose + glucose (total reducing sugars)", "input": "fg_sum", "unit": "% by mass", "mandatory": true,
+          "rule": { "min": 65.0 },
+          "byCategory": { "CARVIA_CALLOSA": { "min": 60.0 }, "HONEYDEW": { "min": 60.0 }, "BLEND_HONEYDEW_BLOSSOM": { "min": 45.0 } },
+          "note": "FSSAI sets a minimum for total reducing sugars; HoneyChain records fructose and glucose and uses their sum.",
+          "failAdvice": "Low reducing sugars can indicate dilution or syrup addition; consider confirmatory sugar profiling." },
+        { "id": "sucrose", "label": "Sucrose", "input": "sucrose_g_100g", "unit": "% by mass", "mandatory": true,
+          "rule": { "max": 5.0 },
+          "byCategory": { "CARVIA_CALLOSA": { "max": 10.0 }, "HONEYDEW": { "max": 10.0 } },
+          "failAdvice": "High sucrose can indicate sugar feeding or adulteration with sucrose syrup." },
+        { "id": "fg_ratio", "label": "Fructose / glucose ratio", "input": "fg_ratio", "unit": "ratio", "mandatory": true,
+          "rule": { "min": 0.95, "max": 1.50 },
+          "failAdvice": "An F/G ratio outside the permitted range can indicate syrup addition; consider isotope (C4/C3) testing." },
+        { "id": "free_acidity", "label": "Free acidity", "input": "free_acidity_meq_kg", "unit": "meq/kg", "mandatory": true,
+          "rule": { "max": 50.0 },
+          "failAdvice": "High acidity can indicate fermentation." },
+        { "id": "hmf", "label": "Hydroxymethylfurfural (HMF)", "input": "hmf_mg_kg", "unit": "mg/kg", "mandatory": true,
+          "rule": { "max": 80.0 },
+          "failAdvice": "High HMF indicates heating or long/poor storage." },
+        { "id": "electrical_conductivity", "label": "Electrical conductivity", "input": "electrical_conductivity_ms_cm", "unit": "mS/cm", "mandatory": true,
+          "rule": { "max": 0.8 },
+          "byCategory": { "HONEYDEW": { "min": 0.8 }, "BLEND_HONEYDEW_BLOSSOM": { "notApplicable": "FSSAI states a maximum for honeys not listed under honeydew and a minimum for honeydew honey; no limit is stated for blends." } },
+          "failAdvice": "Conductivity outside the range for the declared category can indicate a wrong botanical declaration." }
+      ],
+      "notRecorded": [
+        { "label": "Specific gravity at 27 C", "limit": ">= 1.35" },
+        { "label": "Total ash", "limit": "<= 0.50 % by mass" },
+        { "label": "Acidity as formic acid", "limit": "<= 0.20 % by mass" },
+        { "label": "Diastase activity", "limit": ">= 3.0 Schade units/g" },
+        { "label": "Water-insoluble matter", "limit": "<= 0.10 % (pressed honey <= 0.5 %)" },
+        { "label": "C4 sugar", "limit": "<= 7.0 % by mass" },
+        { "label": "Pollen count and plant elements", "limit": ">= 5000 per g" },
+        { "label": "2-AFGP (rice syrup marker)", "limit": "absent" },
+        { "label": "Foreign oligosaccharides", "limit": "<= 0.7 % peak area" },
+        { "label": "Proline", "limit": ">= 180 mg/kg" },
+        { "label": "Carbon isotope differences (delta 13C)", "limit": "max +/-2.1 permil; fructose-glucose +/-1.0 permil; protein-honey >= -1.0 permil" }
+      ]
+    },
+    "CODEX": {
+      "name": "Codex Alimentarius honey standard",
+      "reference": "Codex Standard for Honey, CXS 12-1981 (Rev. 1 1987, Rev. 2 2001)",
+      "version": "CXS 12-1981 Rev. 2 (2001)",
+      "verification": "Values as previously configured in HoneyChain from CXS 12-1981 Rev. 2; the source text could not be re-fetched during this update.",
+      "parameters": [
+        { "id": "moisture", "label": "Moisture", "input": "moisture_pct", "unit": "% by mass", "mandatory": true,
+          "rule": { "max": 20.0 }, "byCategory": { "HEATHER": { "max": 23.0 } },
+          "failAdvice": "High moisture allows fermentation." },
+        { "id": "fg_sum", "label": "Fructose + glucose", "input": "fg_sum", "unit": "g/100 g", "mandatory": true,
+          "rule": { "min": 60.0 }, "byCategory": { "HONEYDEW": { "min": 45.0 }, "BLEND_HONEYDEW_BLOSSOM": { "min": 45.0 } },
+          "failAdvice": "Low fructose + glucose can indicate dilution or syrup addition." },
+        { "id": "sucrose", "label": "Sucrose", "input": "sucrose_g_100g", "unit": "g/100 g", "mandatory": true,
+          "rule": { "max": 5.0 }, "byCategory": { "CITRUS_ROBINIA_ALFALFA": { "max": 10.0 }, "LAVENDER_BORAGE": { "max": 15.0 } },
+          "failAdvice": "High sucrose can indicate sugar feeding or adulteration." },
+        { "id": "free_acidity", "label": "Free acidity", "input": "free_acidity_meq_kg", "unit": "meq/kg", "mandatory": true,
+          "rule": { "max": 50.0 }, "failAdvice": "High acidity can indicate fermentation." },
+        { "id": "hmf", "label": "Hydroxymethylfurfural (HMF)", "input": "hmf_mg_kg", "unit": "mg/kg", "mandatory": true,
+          "rule": { "max": 40.0 }, "byCategory": { "TROPICAL_ORIGIN": { "max": 80.0 } },
+          "failAdvice": "High HMF indicates heating or long storage." },
+        { "id": "electrical_conductivity", "label": "Electrical conductivity", "input": "electrical_conductivity_ms_cm", "unit": "mS/cm", "mandatory": true,
+          "rule": { "max": 0.8 },
+          "byCategory": { "HONEYDEW": { "min": 0.8 }, "BLEND_HONEYDEW_BLOSSOM": { "notApplicable": "Codex limits apply to blossom honeys and to honeydew/chestnut honeys; a blend of honeydew and blossom honey needs analyst judgement." } },
+          "failAdvice": "Conductivity outside the range for the declared category can indicate a wrong botanical declaration." }
+      ],
+      "notRecorded": [
+        { "label": "Diastase activity", "limit": ">= 8 Schade units (>= 3 for low-enzyme honey with HMF <= 15 mg/kg)" },
+        { "label": "Water-insoluble matter", "limit": "<= 0.1 g/100 g (pressed honey <= 0.5 g/100 g)" }
+      ]
+    }
+  }
+}

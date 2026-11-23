@@ -4,17 +4,17 @@
 
 | Suite | Command (from project root) | Tests | Result | What it proves |
 |---|---|---|---|---|
-| PostgreSQL schema | `psql -U postgres -d honeychain -v ON_ERROR_STOP=1 -o NUL -f backend\db\tests\schema_tests.sql` | 44 checks | ✅ 44/44 | Constraints, triggers, lifecycle, immutability, privacy of public views (rolls back) |
+| PostgreSQL schema | `psql -U postgres -d honeychain_test -v ON_ERROR_STOP=1 -o NUL -f backenddb	estsschema_tests.sql` | 78 checks | ✅ 78/78 | Six roles, constraints, triggers, **custody transfers (accept/reject with reason)**, testing requests, the 12-stage lifecycle, quantity rules, immutability, correction-only lab changes, admin-only review, settings / role-change audit, privacy of public views (rolls back) |
 | Concurrency (manual) | see §3 | 1 | ✅ | Row lock stops two sessions over-allocating one harvest |
 | Smart contract | `cd blockchain; npx hardhat test` | 8 | ✅ 8/8 | Anchoring, append-only history, access control, documented test vector |
 | AI service | `cd ai-service; python -m pytest -q` | 11 | ✅ 11/11 | Service key, model gating (untrained → no prediction, tampered/mismatched model refused), adulteration I/O validation, Isolation Forest minimum data |
 | Backend unit | `cd backend; npm run test:unit` | 5 | ✅ 5/5 | Canonical JSON + SHA-256 reproduce the documented test vector |
-| Backend end-to-end | `cd backend; npm test` | 21 (incl. unit) | ✅ 21/21 | Auth, server-side RBAC, ownership isolation, full lifecycle, invalid transitions, QR, public privacy, **on-chain verify + tamper → MISMATCH**, AI gating, MongoDB CRUD, anomaly rules, live statistics |
-| Frontend page render | `cd frontend; npm run test:ui` | 33 | ✅ 33/33 | Every page for every role renders with live data, no runtime errors, no error banners |
-| Frontend UI lifecycle | (same command) | 7 | ✅ 7/7 | Every form submitted through the real React components: hive → harvest → batches → lab draft/AI/submit → processing → dispatch/deliver → consumer page |
+| Backend end-to-end | `cd backend; npm test` | 36 (incl. unit) | ✅ 36/36 | Login + home path for all six roles, **403 RBAC matrix for every role** (incl. admin cannot write business records, consumer cannot read internal APIs), ACCESS_DENIED audit, row-level isolation across organizations, private-field stripping, **full beekeeper → processor → lab → distributor → consumer workflow with rejections**, INCONCLUSIVE re-test, DB-level defences, lab documents, **audited corrections**, user/role/settings management, QR, public privacy + honest verdict, on-chain verify + tamper → MISMATCH, AI gating, anomaly rules, live statistics |
+| Frontend views & pages | `cd frontend; npm run test:ui` | 96 | ✅ 96/96 | For each of the six roles: correct dashboard, sidebar shows **exactly** that role's navigation, every navigation page renders with live data without errors; every role is refused (403 page, no foreign navigation) in all five other views; anonymous users are sent to login; detail and public pages render |
+| Frontend UI workflow | (same command) | 12 | ✅ 12/12 | Through the real React forms of each view: hive → harvest → split → transfer → processor rejects one (reason) / accepts one → processing with loss → testing request → lab accept → results → PASS → transfer → distributor accept → dispatch → delivered → public page journey (no private data) → beekeeper sees the rejection reason |
 | QR decoding (manual) | §4 | 3 | ✅ | Decoded QR images point to `/verify/<their own batch>`, which shows different batch data |
 
-The backend and frontend suites ran with **PostgreSQL 16, a live Hardhat node with the deployed contract, and the live AI service**.
+Latest run (2026-11-22, Windows): **PostgreSQL 18, MongoDB 9 (frontend suites and seed against the real server; backend suite with the in-memory double), a live Hardhat node with the deployed contract, and the live AI service** - nothing skipped. The frontend suites ran against a second backend on port 4100 with separate `honeychain_ui` databases (`API_BASE=http://localhost:4100`), so the main database was not touched. `node tests/seed-smoke.mjs` (backend) resets and seeds only the test database.
 
 ## 2. Where the tests ran, and an honest limitation
 

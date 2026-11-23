@@ -1,5 +1,8 @@
 # 03 — PostgreSQL Design
 
+> **Updated by migration 005:** workflow order is now beekeeper → processor → laboratory → distributor with custody transfers; see [10-role-based-views.md §5](10-role-based-views.md#5-database-changes-migration-005-applied-in-place-existing-rows-kept) for the new tables, triggers and views. Sections below describing lab-before-processing rules or `batches_lab_queue_idx` describe migrations 001-004 only.
+
+
 The DDL lives in `backend/db/migrations/` and runs in order:
 
 | File | Contents |

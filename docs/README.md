@@ -11,6 +11,7 @@
 | [07-ai-service-design](07-ai-service-design.md) | Model gating, dataset questions, rules vs ML, anomaly minimum-data rule |
 | [08-repository-structure](08-repository-structure.md) | Final folder layout and reuse map |
 | [09-decision-log](09-decision-log.md) | Every design decision and its source |
+| [10-role-based-views](10-role-based-views.md) | The six role views, workflow/custody, RBAC layers, API and DB changes |
 | [testing](testing.md) | All test suites, latest results, manual checks |
 | [sepolia-setup](sepolia-setup.md) | Wallet, RPC key, test ETH, deploy to Sepolia |
 | [sql/demo_queries.sql](sql/demo_queries.sql) | 13 DBMS demonstration queries (joins, GROUP BY, subqueries, window, EXPLAIN, transaction) |
@@ -18,6 +19,6 @@
 
 Executable design artifacts:
 
-- `backend/db/migrations/001–004*.sql`: PostgreSQL DDL (tested on PostgreSQL 16)
-- `backend/db/tests/schema_tests.sql`: 44 automated schema checks
+- `backend/db/migrations/001–005*.sql`: PostgreSQL DDL (tested on PostgreSQL 16 and 18)
+- `backend/db/tests/schema_tests.sql`: 78 automated schema checks
 - `backend/db/mongo/collections.json`: MongoDB validators and indexes

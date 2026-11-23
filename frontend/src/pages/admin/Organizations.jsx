@@ -1,14 +1,14 @@
 import { patch, post } from '../../api/client.js';
 import { Alert, Async, Badge, Card, DemoBadge, ErrorBox, Field, PageHeader, Table, useAction, useApi, useForm } from '../../components/ui.jsx';
 
-export default function Organizations() {
+export default function Organizations({ embedded = false }) {
   const s = useApi('/admin/organizations');
   const f = useForm({ name: '', orgType: 'LABORATORY', city: '', state: 'Karnataka', accreditationNo: '' });
   const a = useAction();
   const t = useAction();
   return (
     <>
-      <PageHeader title="Organizations" subtitle="Laboratories, processing units and distributors. Staff users belong to one organization." />
+      {!embedded && <PageHeader title="Organizations" subtitle="Laboratories, processing units and distributors. Staff users belong to one organization." />}
       <Card title="Add organization">
         <ErrorBox error={a.error} />
         {a.message && <Alert kind="success">{a.message}</Alert>}

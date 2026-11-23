@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { post } from '../../api/client.js';
-import { Alert, Async, Card, DemoBadge, ErrorBox, Field, PageHeader, Pager, Table, useAction, useApi, useForm, fmtDate, kg, today } from '../../components/ui.jsx';
+import { Alert, Async, Card, DemoBadge, ErrorBox, Field, PageHeader, Pager, Table, useAction, useApi, useForm, useBase, fmtDate, kg, today } from '../../components/ui.jsx';
 
 export default function Harvests() {
+  const base = useBase();
   const [page, setPage] = useState(1);
   const s = useApi(`/harvests?page=${page}`);
   const hives = useApi('/hives?status=ACTIVE&pageSize=100');
@@ -22,7 +23,7 @@ export default function Harvests() {
       <Card title="Record a harvest">
         <ErrorBox error={a.error} />
         {a.message && <Alert kind="success">{a.message}</Alert>}
-        {hives.data?.length === 0 && <Alert kind="warn">You need an active hive first. <Link to="/app/hives">Register a hive</Link></Alert>}
+        {hives.data?.length === 0 && <Alert kind="warn">You need an active hive first. <Link to={base('hives')}>Register a hive</Link></Alert>}
         <form onSubmit={submit} className="form-grid">
           <Field label="Hive">
             <select required {...f.bind('hiveCode')}>
@@ -42,13 +43,13 @@ export default function Harvests() {
           {(rows, meta) => (
             <>
               <Table rows={rows} rowKey={(r) => r.harvest_code} columns={[
-                { label: 'Harvest ID', render: (r) => <><Link to={`/app/harvests/${r.harvest_code}`}>{r.harvest_code}</Link> <DemoBadge show={r.is_demo} /></> },
+                { label: 'Harvest ID', render: (r) => <><Link to={base(`harvests/${r.harvest_code}`)}>{r.harvest_code}</Link> <DemoBadge show={r.is_demo} /></> },
                 { label: 'Hive', key: 'hive_code' },
                 { label: 'Date', render: (r) => fmtDate(r.harvest_date) },
                 { label: 'Floral source', key: 'floral_source' },
                 { label: 'Quantity', render: (r) => kg(r.quantity_kg) },
                 { label: 'Batched', render: (r) => `${kg(r.batched_kg)} in ${r.batch_count} batch(es)` },
-                { label: '', render: (r) => Number(r.batched_kg) < Number(r.quantity_kg) ? <Link className="btn small" to={`/app/harvests/${r.harvest_code}`}>Create batches</Link> : <small className="muted">fully batched</small> },
+                { label: '', render: (r) => Number(r.batched_kg) < Number(r.quantity_kg) ? <Link className="btn small" to={base(`harvests/${r.harvest_code}`)}>Create batches</Link> : <small className="muted">fully batched</small> },
               ]} />
               <Pager meta={meta} page={page} setPage={setPage} />
             </>

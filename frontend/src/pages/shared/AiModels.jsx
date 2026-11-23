@@ -1,13 +1,40 @@
-import { Async, Badge, Card, PageHeader, useApi, fmtDateTime } from '../../components/ui.jsx';
+import { Async, Badge, Card, PageHeader, Table, useApi, fmtDateTime } from '../../components/ui.jsx';
+
+function StandardsRules() {
+  const o = useApi('/ai/lab-analysis/options');
+  return (
+    <Async state={o}>
+      {(d) => (
+        <Card title={<>{d.title} <span className="badge info">RULES, NOT AI</span></>}>
+          <p>Runs automatically on every submitted lab report. Active standard: <strong>{d.activeProfile}</strong> (the other profile is shown as a reference). Failed-standard policy: <strong>{String(d.failedStandardPolicy).replaceAll('_', ' ')}</strong>. Rule set version {d.rulesetVersion}.</p>
+          {d.profiles.map((p) => (
+            <details key={p.key} style={{ marginBottom: 8 }}>
+              <summary><strong>{p.name}</strong> - {p.version}</summary>
+              <p className="muted" style={{ fontSize: '0.83rem' }}>{p.reference}<br />{p.verification}</p>
+              <Table rows={p.parameters} rowKey={(x) => x.id} columns={[
+                { label: 'Parameter', render: (x) => <>{x.label}{x.mandatory ? ' *' : ''}</> }, { label: 'General limit', key: 'limit' },
+                { label: 'Honey-type exceptions', render: (x) => Object.entries(x.exceptions).map(([c, l]) => c + ': ' + l).join('; ') || '-' },
+              ]} />
+              <small className="muted">Not recorded by HoneyChain (confirm on the lab certificate): {p.notRecorded.map((n) => n.label).join(', ')}</small>
+            </details>
+          ))}
+        </Card>
+      )}
+    </Async>
+  );
+}
 
 export default function AiModels() {
   const s = useApi('/ai/models');
   return (
     <>
-      <PageHeader title="AI models" subtitle="Status, inputs, datasets, evaluation and limitations of each model" />
+      <PageHeader title="AI models" subtitle="Automatic lab analysis: standards rules, the Random Forest model status, and retired research models" />
+      <StandardsRules />
       <Async state={s}>
         {(d) => !d.available ? <div className="alert error">AI service is not reachable: {d.error}</div> : d.models.map((m) => (
           <Card key={m.name} title={<>{m.name} <Badge value={m.status} /></>}>
+            {m.name === 'honey-quality' && <p><strong>Random Forest classifier</strong> used by the automatic lab analysis when a validated model exists.</p>}
+            {m.name === 'honey-adulteration' && <div className="alert info">Retired from the normal lab workflow (it needs hyperspectral scans, not ordinary lab measurements). Kept for reference only.</div>}
             {m.status !== 'TRAINED' && <div className="alert warn">{m.reason}</div>}
             {m.description && <p>{m.description}</p>}
             {m.status === 'TRAINED' && (
@@ -31,7 +58,7 @@ export default function AiModels() {
           </Card>
         ))}
       </Async>
-      <div className="notice">Rule-based standards screening (moisture, HMF, sucrose limits) is not AI and is always available on lab reports. AI output is decision support only; laboratory decisions are authoritative.</div>
+      <div className="notice">The Standards-Based Laboratory Compliance Check is deterministic (not AI) and works even when no ML model is trained. AI output is decision support only; laboratory decisions are authoritative.</div>
     </>
   );
 }

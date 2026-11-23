@@ -9,8 +9,10 @@ import { insertWithOutbox } from './activityLog.js';
 import { ai } from './aiClient.js';
 import { standardsProfile } from './standards.js';
 import { env } from '../config/env.js';
+import { getSettings } from './settings.js';
 
-export const RULE_CONFIG = { maxProcessLossPct: 10, maxSingleHiveHarvestKg: 60 };
+// maxProcessLossPct and standardsProfile are refreshed from app_settings at the start of every scan
+export const RULE_CONFIG = { maxProcessLossPct: 10, maxSingleHiveHarvestKg: 60, standardsProfile: undefined };
 
 async function loadBatches(batchCode) {
   const { rows } = await query(
@@ -30,7 +32,7 @@ async function loadBatches(batchCode) {
               WHERE a.batch_id = b.batch_id AND v.result = 'MISMATCH'
                 AND v.check_id = (SELECT max(v2.check_id) FROM verification_checks v2 WHERE v2.anchor_id = a.anchor_id) LIMIT 1) AS integrity
        FROM batches b JOIN harvests h ON h.harvest_id = b.harvest_id
-       LEFT JOIN lab_reports lr ON lr.batch_id = b.batch_id AND lr.report_state = 'SUBMITTED'
+       LEFT JOIN lab_reports lr ON lr.lab_report_id = batch_current_report(b.batch_id)
        LEFT JOIN processing_records p ON p.batch_id = b.batch_id
       WHERE ($1::text IS NULL OR b.batch_code = $1)
       ORDER BY b.batch_id`, [batchCode]);
@@ -54,18 +56,19 @@ export function evaluateRules(b, duplicateGroups = new Map()) {
   if (b.units_packed == null && b.shipment_count > 0)
     add('R04_SHIPPED_UNITS', 'CRITICAL', 'Shipments exist but there is no processing record', { shipments: b.shipment_count });
 
-  const order = [['harvest', b.harvest_date], ['lab received', b.received_on], ['lab tested', b.tested_on], ['processed', b.processing_date], ['packaged', b.packaging_date], ['first dispatch', b.first_dispatch]].filter(([, d]) => d);
+  // workflow order: harvest -> processing -> laboratory (sample of the processed batch) -> dispatch
+  const order = [['harvest', b.harvest_date], ['processed', b.processing_date], ['lab received', b.received_on], ['lab tested', b.tested_on], ['first dispatch', b.first_dispatch]].filter(([, d]) => d);
   for (let i = 1; i < order.length; i++) {
     if (Date.parse(order[i][1]) < Date.parse(order[i - 1][1]))
       add('R05_DATE_ORDER', 'CRITICAL', `${order[i][0]} date (${order[i][1]}) is before ${order[i - 1][0]} date (${order[i - 1][1]})`, { earlier: order[i - 1], later: order[i] });
   }
   if (b.bad_ship_dates) add('R05_DATE_ORDER', 'CRITICAL', 'A shipment is dated before packaging or delivered before dispatch');
 
-  if ((b.processing_code || b.shipment_count > 0) && b.decision !== 'PASS')
-    add('R06_STAGE_WITHOUT_PASS', 'CRITICAL', 'Processing/distribution records exist without a submitted PASS lab decision', { decision: b.decision ?? null });
+  if (b.shipment_count > 0 && b.decision !== 'PASS')
+    add('R06_STAGE_WITHOUT_PASS', 'CRITICAL', 'Distribution records exist without a current submitted PASS lab decision', { decision: b.decision ?? null });
 
   if (b.decision === 'PASS') {
-    const prof = standardsProfile();
+    const prof = standardsProfile(RULE_CONFIG.standardsProfile);
     const vals = { moisture_pct: b.moisture, hmf_mg_kg: b.hmf, sucrose_g_100g: b.sucrose };
     for (const c of prof.checks) {
       const v = vals[c.parameter];
@@ -98,8 +101,8 @@ function mlFeatures(b) {
   return {
     process_yield: b.input_kg ? b.output_kg / b.input_kg : null,
     batch_share_of_harvest: b.harvest_kg ? b.batch_kg / b.harvest_kg : null,
-    days_harvest_to_test: days(b.harvest_date, b.tested_on),
-    days_test_to_processing: days(b.tested_on, b.processing_date),
+    days_harvest_to_processing: days(b.harvest_date, b.processing_date),
+    days_processing_to_test: days(b.processing_date, b.tested_on),
     days_processing_to_dispatch: days(b.processing_date, b.first_dispatch),
     moisture_pct: b.moisture,
     hmf_mg_kg: b.hmf,
@@ -109,6 +112,9 @@ function mlFeatures(b) {
 
 export async function runAnomalyScan(batchCode = null) {
   const runId = `${new Date().toISOString()}-${crypto.randomBytes(3).toString('hex')}`;
+  const settings = await getSettings({ fresh: true });
+  RULE_CONFIG.maxProcessLossPct = Number(settings.max_processing_loss_pct);
+  RULE_CONFIG.standardsProfile = settings.standards_profile;
   const all = await loadBatches(null);
   const target = batchCode ? all.filter((b) => b.batch_code === batchCode) : all;
   if (batchCode && !target.length) return { runId, error: 'Batch not found', reportsCreated: 0, ml: { status: 'NOT_RUN' } };

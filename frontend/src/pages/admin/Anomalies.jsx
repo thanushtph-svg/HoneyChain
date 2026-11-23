@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { del, patch, post, qs } from '../../api/client.js';
-import { Alert, Async, Badge, Card, ErrorBox, PageHeader, Pager, useAction, useApi, fmtDateTime } from '../../components/ui.jsx';
+import { Alert, Async, Badge, Card, ErrorBox, PageHeader, Pager, useAction, useApi, fmtDateTime, useBase } from '../../components/ui.jsx';
 
 function Report({ r, onChange }) {
+  const base = useBase();
   const a = useAction();
   const [note, setNote] = useState('');
   const act = async (status) => { if (await a.run(() => patch(`/admin/anomalies/${r._id}`, { status, note: note || `${status.toLowerCase()} by admin` }))) onChange(); };
@@ -11,7 +12,7 @@ function Report({ r, onChange }) {
   return (
     <div className="card">
       <div className="card-head">
-        <h3>{r.scope === 'SYSTEM' ? 'Scan summary' : <>Batch <Link to={`/app/batches/${r.batchCode}`}>{r.batchCode}</Link></>} <small className="muted">{fmtDateTime(r.updatedAt)}</small></h3>
+        <h3>{r.scope === 'SYSTEM' ? 'Scan summary' : <>Batch <Link to={base(`batches/${r.batchCode}`)}>{r.batchCode}</Link></>} <small className="muted">{fmtDateTime(r.updatedAt)}</small></h3>
         <div className="btn-row"><Badge value={r.status} />{r.containsDemoData && <span className="badge demo">INCLUDES DEMO DATA</span>}</div>
       </div>
       {r.ruleFindings.length > 0 && (

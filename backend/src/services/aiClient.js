@@ -30,9 +30,13 @@ export const ai = {
   predictQuality: (features) => call('/v1/quality/predict', { method: 'POST', body: { features } }),
   predictAdulteration: (payload) => call('/v1/adulteration/predict', { method: 'POST', body: payload }),
   scoreAnomaly: (payload) => call('/v1/anomaly/score', { method: 'POST', body: payload, timeoutMs: 60000 }),
+  standards: () => call('/v1/standards'),
+  labAnalysis: (payload) => call('/v1/lab-analysis', { method: 'POST', body: payload, timeoutMs: 30000 }),
 };
 
 export async function aiHealth() {
   const r = await ai.health();
-  return r.ok ? { status: 'up', detail: `models: ${r.data.models ?? '?'}` } : { status: 'down', detail: r.error };
+  return r.ok
+    ? { status: 'up', detail: `models: ${Object.entries(r.data.models ?? {}).map(([k, v]) => `${k} ${v}`).join(', ') || '?'}` }
+    : { status: 'down', detail: r.error };
 }

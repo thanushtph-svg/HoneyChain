@@ -2,21 +2,34 @@
 
 **AI-assisted honey quality & adulteration analysis with blockchain-based supply-chain traceability.** A DBMS course project.
 
-One web application tracks honey from the beekeeper to the consumer:
+One web application with **six separate role-based views** tracks honey from the beekeeper to the consumer.
+Every hand-over is a custody **transfer** that the receiver must **accept** or **reject with a reason**:
 
 ```
-Beekeeper ──► Laboratory ──► Processor ──► Distributor ──► Consumer (QR code, no login)
- hives          test results    processing     dispatch &       origin, lab, journey,
- harvests       AI support      packaging      delivery         blockchain integrity
- batches        decision
-                          Administrator: users, records, anomalies, blockchain
+Beekeeper ──transfer──► Processor ──testing request──► Lab Tester ──result──► Processor ──transfer──► Distributor ──► Consumer
+ hives                   accept/reject                  accept/reject           (custody)              accept/reject      QR code, no login
+ harvests → batches      processing, losses             PASS/FAIL/INCONCLUSIVE                         shipments,         origin, processing, lab,
+ QR codes                                               documents, corrections                         delivery           journey, blockchain check
+
+Administrator: users & roles, monitoring, audit logs, blockchain, anomalies, reports, settings, approves audited lab corrections
 ```
+
+| View | URL | Who |
+|---|---|---|
+| Beekeeper | `/beekeeper` | registers hives, records harvests, creates/splits batches, transfers to a processor |
+| Processor | `/processor` | accepts/rejects batches, records processing, requests lab testing, transfers to distributors |
+| Lab Tester | `/lab` | accepts/rejects testing requests, records results, documents, requests corrections |
+| Distributor | `/distributor` | accepts/rejects batches, records shipments and delivery |
+| Admin | `/admin` | administration and read-only monitoring (cannot edit business records) |
+| Consumer | `/verify` (no account) and `/consumer` (optional account with history) | product verification |
+
+Details: [docs/10-role-based-views.md](docs/10-role-based-views.md).
 
 | Layer | Technology |
 |---|---|
 | Frontend | React 19 + Vite + React Router |
-| Backend | Node.js 20+/22 + Express 5 (REST, zod validation, JWT httpOnly cookie, RBAC) |
-| Primary DB | PostgreSQL 14+ (17 tables, 11 trigger functions, partial indexes, views) |
+| Backend | Node.js 20+/22 + Express 5 (REST, zod validation, JWT httpOnly cookie, six-role RBAC + row-level scopes) |
+| Primary DB | PostgreSQL 14+ (25 tables, 20 trigger functions, partial indexes, views; business rules enforced by triggers) |
 | Secondary DB | MongoDB Community 7/8 (AI results, spectral scans, anomaly reports, activity logs) |
 | AI service | Python 3.11–3.13, FastAPI, scikit-learn 1.9.1 |
 | Blockchain | Solidity 0.8.24 contract, Hardhat local chain (default) or Sepolia testnet |
@@ -117,7 +130,7 @@ npm run db:mongo-init     # creates MongoDB collections with validators and inde
 cd ..
 ```
 
-Expected output ends with `[migrate] 4 new migration(s)` and four `[mongo-init] ... ready` lines.
+Expected output ends with `[migrate] 5 new migration(s)` and four `[mongo-init] ... ready` lines.
 
 ---
 
@@ -167,57 +180,67 @@ npm run db:reset -- --yes   # WIPES all HoneyChain data
 npm run db:seed
 ```
 
-The seed drives the real API: it creates organizations, users, hives, harvests, 7 batches in different lifecycle stages, lab reports, processing, shipments and AI analyses. It anchors 15 records on-chain and runs an anomaly scan. Every row is flagged **DEMO DATA**.
+The seed drives the real API through the complete workflow: organizations, users of all six roles, hives, harvests, 10 batches in different stages, custody transfers (one rejected), processing, testing requests (one rejected), lab reports (PASS / FAIL / INCONCLUSIVE / draft), a pending audited correction, shipments and AI analyses. It anchors 24 records on-chain and runs an anomaly scan. Every row is flagged **DEMO DATA**.
 
-| Role | Email | Password |
-|---|---|---|
-| Administrator | admin@honeychain.demo | Demo@1234 |
-| Laboratory | lab@honeychain.demo | Demo@1234 |
-| Processor | processor@honeychain.demo | Demo@1234 |
-| Distributor | distributor@honeychain.demo | Demo@1234 |
-| Beekeeper | lakshmi@honeychain.demo · ramesh@honeychain.demo · anitha@honeychain.demo | Demo@1234 |
+| Role | Email | Password | Lands on |
+|---|---|---|---|
+| Administrator | admin@honeychain.demo | Demo@1234 | `/admin` |
+| Lab Tester | lab@honeychain.demo | Demo@1234 | `/lab` |
+| Processor | processor@honeychain.demo (second unit: processor2@honeychain.demo) | Demo@1234 | `/processor` |
+| Distributor | distributor@honeychain.demo | Demo@1234 | `/distributor` |
+| Beekeeper | lakshmi@honeychain.demo · ramesh@honeychain.demo · anitha@honeychain.demo | Demo@1234 | `/beekeeper` |
+| Consumer (optional account) | consumer@honeychain.demo | Demo@1234 | `/consumer` |
 
 Demo batches:
 
 | Batch | State | Shows |
 |---|---|---|
-| HC-2026-000001 | DELIVERED | complete journey, 5 anchored records |
+| HC-2026-000001 | DELIVERED | complete journey, all records anchored and VERIFIED |
 | HC-2026-000003 | IN_DISTRIBUTION | shipment in transit |
-| HC-2026-000005 | LAB_PASSED | HMF above the FSSAI limit but PASS, so rule **R07** is flagged |
+| HC-2026-000005 | LAB_PASSED | HMF above the FSSAI limit but PASS (rule **R07**) + a correction waiting for admin review |
 | HC-2026-000006 | IN_TESTING | draft report with 2 hyperspectral scans and real adulteration predictions |
 | HC-2026-000004 | LAB_FAILED | failing lab values |
-| HC-2026-000002 / 000007 | CREATED | waiting for testing |
+| HC-2026-000009 | LAB_INCONCLUSIVE | processor can request a re-test |
+| HC-2026-000010 | PENDING_LAB | first testing request rejected by the lab (reason recorded), second one pending |
+| HC-2026-000007 | PENDING_PROCESSOR | waiting for the processor to accept |
+| HC-2026-000008 | CREATED | rejected by the second processor, back with the beekeeper (reason recorded) |
+| HC-2026-000002 | CREATED | not yet sent to a processor |
 
-Consumer page: **http://localhost:5173/verify/HC-2026-000001**
+Consumer page: **http://localhost:5173/verify/HC-2026-000001** (no login).
+
+**Using real data instead of the demo seed:** create the first administrator, then create organizations and staff accounts in *Admin > Settings > Organizations* and *Admin > User Management*:
+
+```powershell
+cd backend
+$env:ADMIN_PASSWORD = "choose-a-strong-pass1"   # optional; otherwise a random one is printed once
+npm run admin:create -- --email you@example.org --name "Your Name"
+```
 
 ---
 
 ## 7. Five-minute demo script (for the viva)
 
-1. **Consumer:** open `/verify/HC-2026-000001`. It shows origin, harvest, lab values, processing and journey, with every record marked *VERIFIED* against the chain.
-2. **Beekeeper** (anitha): register a hive, record a harvest, create 2 batches and assign the lab. Each batch gets a QR code (batch page, then *Download PNG*).
-3. **Lab:** Testing queue, then *Enter results*. Save the draft and run the quality analysis: the rule-based screening appears and the ML quality model honestly says *Not trained*. Submit PASS.
-4. **Lab** on HC-2026-000006: the adulteration model gives a real prediction from hyperspectral data, with a LOW reliability warning.
-5. **Processor**, then **Distributor:** record processing, dispatch, then mark delivered. The batch becomes DELIVERED.
-6. **Tamper demo** (shows blockchain value), in a psql window:
-   ```powershell
-   & "C:\Program Files\PostgreSQL\17\bin\psql.exe" -U postgres -d honeychain
-   ```
+1. **Consumer (no account):** open `/verify/HC-2026-000001`. The banner says *Records verified against the blockchain* only because every published record verified; the journey shows harvest → processor → processing → lab → distributor → shipments.
+2. **Beekeeper** (anitha): register a hive, record a harvest, split it into 2 batches (each gets a QR code), open a batch and *Transfer to a processor*.
+3. **Processor:** *Incoming Batches* → accept one, reject the other with a reason (the beekeeper's dashboard shows it returned). *Processing* → record processing (the loss is calculated). *Processed Batches* → send a testing request to the laboratory.
+4. **Lab Tester:** *Testing Requests* → accept. *Pending Tests* → enter results; the page separates laboratory measurements, the standards-based rule check (with its suggested decision) and AI. Submit PASS. Try the adulteration model on HC-2026-000006 (real prediction, LOW reliability warning).
+5. **Processor** → *Transfers* → send to the distributor. **Distributor** → accept → *Distribution* → dispatch → *Delivery Status* → delivered.
+6. **Admin:** *Laboratory Monitoring* → approve the pending correction on HC-2026-000005: the old report stays as SUPERSEDED (still verifiable), a new corrected report is created and anchored. *Role Management* shows the permission matrix; *Reports* shows quantity reconciliation and security events (try opening `/admin` as a beekeeper: *Access denied*, logged as ACCESS_DENIED).
+7. **Tamper demo** (shows blockchain value), in a psql window:
    ```sql
    ALTER TABLE lab_reports DISABLE TRIGGER lab_reports_rules;
    UPDATE lab_reports SET moisture_pct = 15.00 WHERE report_code = 'LAB-2026-000001';
    ALTER TABLE lab_reports ENABLE TRIGGER lab_reports_rules;
    ```
-   As admin, open Blockchain and click *Verify* on that lab report: the result is **MISMATCH**. The public page shows an integrity warning, and an anomaly scan raises **R10_INTEGRITY**.
-7. **Admin:** Anomalies, then *Run scan now*. Rules are listed separately from Isolation Forest, which reports *insufficient data* until 50 genuine batches exist.
+   As admin, *Blockchain Monitoring* → *Verify*: **MISMATCH**. The public page now shows an integrity warning instead of "verified", and an anomaly scan raises **R10_INTEGRITY**.
 
 ---
 
 ## 8. Run the tests
 
 ```powershell
-# Database schema (44 checks, rolls back)
-& "C:\Program Files\PostgreSQL\17\bin\psql.exe" -U postgres -d honeychain -v ON_ERROR_STOP=1 -o NUL -f backend\db\tests\schema_tests.sql
+# Database schema (78 checks, rolls back - run against the TEST database)
+& "C:\Program Files\PostgreSQL\17\bin\psql.exe" -U postgres -d honeychain_test -v ON_ERROR_STOP=1 -o NUL -f backend\db\tests\schema_tests.sql
 
 # Smart contract (8 tests)
 cd blockchain; npx hardhat test; cd ..
@@ -225,11 +248,12 @@ cd blockchain; npx hardhat test; cd ..
 # AI service (11 tests)
 cd ai-service; .\.venv\Scripts\Activate.ps1; python -m pytest -q; deactivate; cd ..
 
-# Backend end-to-end API tests (21 tests; uses a separate database honeychain_test).
+# Backend end-to-end API tests (36 tests incl. the RBAC matrix for all six roles; uses database honeychain_test).
 # Start the Hardhat node + deploy + AI service first so blockchain/AI tests run instead of being skipped.
 cd backend; npm test; cd ..
 
-# Frontend UI tests (40 tests) - need the seeded backend running on :4000
+# Frontend UI tests (108 tests: 96 page/navigation/403 checks + 12-step UI workflow) - need a seeded backend.
+# Point API_BASE at it (default http://localhost:4000).
 cd frontend; npm run test:ui; cd ..
 ```
 

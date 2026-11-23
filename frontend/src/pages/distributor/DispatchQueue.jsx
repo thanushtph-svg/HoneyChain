@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { post } from '../../api/client.js';
-import { Alert, Async, Badge, Card, DemoBadge, ErrorBox, Field, PageHeader, Table, useAction, useApi, useForm, fmtDate, today } from '../../components/ui.jsx';
+import { Alert, Async, Badge, Card, DemoBadge, ErrorBox, Field, PageHeader, Table, useAction, useApi, useForm, fmtDate, today, useBase } from '../../components/ui.jsx';
 
 const DEST = ['WAREHOUSE', 'DISTRIBUTOR', 'RETAILER', 'INSTITUTION', 'OTHER'];
 
 export default function DispatchQueue() {
+  const base = useBase();
   const [sp] = useSearchParams();
   const s = useApi('/distribution/queue');
   const [sel, setSel] = useState(sp.get('batch') ?? '');
@@ -21,33 +22,36 @@ export default function DispatchQueue() {
 
   return (
     <>
-      <PageHeader title="Dispatch queue" subtitle="Processed batches with packed units not yet shipped" />
+      <PageHeader title="Distribution" subtitle="Batches your company has accepted that still have packed units to ship" />
       <Card>
-        <Async state={s} empty="Nothing to dispatch.">
+        <Async state={s} empty="Nothing to dispatch. Accept incoming batches first.">
           {(rows) => <Table rows={rows} rowKey={(r) => r.batch_code} columns={[
-            { label: 'Batch', render: (r) => <><Link to={`/app/batches/${r.batch_code}`}>{r.batch_code}</Link> <DemoBadge show={r.is_demo} /></> },
+            { label: 'Batch', render: (r) => <><Link to={base(`batches/${r.batch_code}`)}>{r.batch_code}</Link> <DemoBadge show={r.is_demo} /></> },
             { label: 'Honey', key: 'honey_type' },
             { label: 'Processor', render: (r) => `${r.processor_name}, ${r.processor_city}` },
             { label: 'Packed', render: (r) => `${r.units_packed} × ${r.unit_size_g} g (${fmtDate(r.packaging_date)})` },
+            { label: 'Lab result', render: (r) => <Badge value={r.lab_decision} /> },
+            { label: 'Best before', render: (r) => fmtDate(r.best_before) },
             { label: 'Units left', key: 'units_remaining' },
             { label: 'Status', render: (r) => <Badge value={r.status} /> },
             { label: '', render: (r) => <button className="btn small" onClick={() => { setSel(r.batch_code); a.setMessage(null); }}>Dispatch</button> },
           ]} />}
         </Async>
       </Card>
-      {a.message && <Alert kind="success">{a.message} <Link to="/app/shipments">Update delivery status</Link></Alert>}
+      {a.message && <Alert kind="success">{a.message} <Link to={base('delivery')}>Update delivery status</Link></Alert>}
       {batch && (
         <Card title={`Dispatch ${batch.batch_code} (${batch.units_remaining} units available)`}>
           <ErrorBox error={a.error} />
           <form className="form-grid" onSubmit={async (e) => {
             e.preventDefault();
+            if (!window.confirm(`Dispatch ${f.values.unitsShipped} units of ${batch.batch_code} to ${f.values.destinationName}?`)) return;
             const r = await a.run(() => post('/shipments', { batchCode: batch.batch_code, ...f.values }), (res) => `Shipment ${res.data.shipment_code} dispatched`);
             if (r) { setSel(''); s.reload(); }
           }}>
             <Field label="Dispatch date"><input type="date" required max={today()} {...f.bind('dispatchDate')} /></Field>
             <Field label="Units shipped"><input type="number" min="1" max={batch.units_remaining} required {...f.bind('unitsShipped')} /></Field>
-            <Field label="Origin" full><input required {...f.bind('originLocation')} /></Field>
-            <Field label="Destination name"><input required {...f.bind('destinationName')} /></Field>
+            <Field label="Dispatched from" full><input required {...f.bind('originLocation')} /></Field>
+            <Field label="Recipient / destination name"><input required {...f.bind('destinationName')} /></Field>
             <Field label="Destination type"><select {...f.bind('destinationType')}>{DEST.map((d) => <option key={d}>{d}</option>)}</select></Field>
             <Field label="City"><input required {...f.bind('destinationCity')} /></Field>
             <Field label="State"><input required {...f.bind('destinationState')} /></Field>

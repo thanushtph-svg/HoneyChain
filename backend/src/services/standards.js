@@ -6,6 +6,22 @@ import { fileURLToPath } from 'node:url';
 const file = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../config/standards.json');
 const cfg = JSON.parse(fs.readFileSync(file, 'utf8'));
 
+/** All configured profiles (admin Settings page) */
+export function listStandardsProfiles() {
+  return Object.entries(cfg.profiles).map(([key, p]) => ({ key, name: p.name, source: p.source, checks: p.checks }));
+}
+
+/**
+ * Suggested decision from rule-based screening ONLY (never AI):
+ * any EXCEEDS_LIMIT -> FAIL; all core checks measured and within -> PASS; otherwise INCONCLUSIVE.
+ * The laboratory still decides; this is shown next to its decision.
+ */
+export function suggestDecision(screening) {
+  if (screening.checks.some((c) => c.outcome === 'EXCEEDS_LIMIT')) return 'FAIL';
+  if (screening.checks.length && screening.checks.every((c) => c.outcome === 'WITHIN_LIMIT')) return 'PASS';
+  return 'INCONCLUSIVE';
+}
+
 export function standardsProfile(name = process.env.STANDARDS_PROFILE || cfg.defaultProfile) {
   return { key: name, ...(cfg.profiles[name] ?? cfg.profiles[cfg.defaultProfile]) };
 }

@@ -35,7 +35,7 @@ def sha256_file(path: Path) -> str:
 @dataclass
 class ModelEntry:
     name: str
-    status: str  # TRAINED | NOT_TRAINED
+    status: str  # TRAINED | NOT_TRAINED | LOAD_ERROR
     reason: str | None = None
     manifest: dict[str, Any] = field(default_factory=dict)
     metrics: dict[str, Any] = field(default_factory=dict)
@@ -97,7 +97,12 @@ class Registry:
         self.reload()
 
     def reload(self) -> None:
-        self.models = {n: load_model(n, self.model_dir) for n in self.NAMES}
+        self.models = {}
+        for n in self.NAMES:
+            try:
+                self.models[n] = load_model(n, self.model_dir)
+            except Exception as e:  # noqa: BLE001 - a broken model file must not stop the service
+                self.models[n] = ModelEntry(n, "LOAD_ERROR", f"Model could not be loaded: {e}")
 
     def get(self, name: str) -> ModelEntry:
         return self.models[name]

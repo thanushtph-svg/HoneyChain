@@ -10,8 +10,10 @@ import { one } from '../db/pg.js';
 import { collection, toObjectId } from '../db/mongo.js';
 import { insertWithOutbox, logActivity } from '../services/activityLog.js';
 import { screenReport } from '../services/standards.js';
+import { getSetting } from '../services/settings.js';
 import { ai } from '../services/aiClient.js';
 import { getReadableReport } from './lab.routes.js';
+import { analysisOptions, analysisView, runLabAnalysis } from '../services/labAnalysis.js';
 
 const r = Router();
 r.use(['/lab', '/ai'], requireAuth);
@@ -40,7 +42,7 @@ async function saveAnalysis(doc) {
   return { ...doc, _id: s.id ? String(s.id) : null, saved: s.saved, warnings: s.saved ? doc.warnings : [...doc.warnings, 'MongoDB unavailable: result queued for saving, not yet stored'] };
 }
 
-r.post('/lab/reports/:reportCode/ai/quality', requireRole('LAB'), async (req, res) => {
+r.post('/lab/reports/:reportCode/ai/quality', requireRole('LAB_TESTER'), async (req, res) => {
   const rep = await getReadableReport(req.user, req.params.reportCode);
   const features = Object.fromEntries(QUALITY_FEATURES.map((k) => [k, rep[k] == null ? null : Number(rep[k])]));
   const resp = await ai.predictQuality(features);
@@ -54,7 +56,7 @@ r.post('/lab/reports/:reportCode/ai/quality', requireRole('LAB'), async (req, re
     labReportId: rep.lab_report_id,
     spectralScanId: null,
     inputSnapshot: features,
-    standardsScreening: screenReport(rep),
+    standardsScreening: screenReport(rep, await getSetting('standards_profile')),
     model: mb.model,
     prediction: mb.prediction,
     details: mb.extra ?? null,
@@ -72,7 +74,7 @@ r.post('/lab/reports/:reportCode/ai/quality', requireRole('LAB'), async (req, re
 
 r.post(
   '/lab/reports/:reportCode/ai/adulteration',
-  requireRole('LAB'),
+  requireRole('LAB_TESTER'),
   validateBody(z.object({ spectralScanId: z.string().min(1) })),
   async (req, res) => {
     const rep = await getReadableReport(req.user, req.params.reportCode);
@@ -115,13 +117,13 @@ r.post(
   },
 );
 
-r.get('/lab/reports/:reportCode/ai', requireRole('LAB', 'ADMIN'), async (req, res) => {
+r.get('/lab/reports/:reportCode/ai', requireRole('LAB_TESTER', 'ADMIN'), async (req, res) => {
   const rep = await getReadableReport(req.user, req.params.reportCode);
   const docs = await (await collection('ai_analysis_results')).find({ labReportId: rep.lab_report_id }).sort({ createdAt: -1 }).toArray();
   ok(res, docs.map((d) => ({ ...d, _id: String(d._id), spectralScanId: d.spectralScanId ? String(d.spectralScanId) : null })));
 });
 
-r.patch('/ai/analyses/:id/review', requireRole('LAB'), validateBody(z.object({ note: z.string().trim().max(1000).optional() })), async (req, res) => {
+r.patch('/ai/analyses/:id/review', requireRole('LAB_TESTER'), validateBody(z.object({ note: z.string().trim().max(1000).optional() })), async (req, res) => {
   const id = toObjectId(req.params.id);
   if (!id) throw notFound('Analysis');
   const col = await collection('ai_analysis_results');
@@ -145,7 +147,31 @@ r.delete('/ai/analyses/:id', requireRole('ADMIN'), async (req, res) => {
   ok(res, { deleted: true });
 });
 
-r.get('/ai/models', async (_req, res) => {
+// ------------------------------------------------------------ compulsory automatic lab analysis (primary workflow)
+const HONEY_CATEGORIES = ['BLOSSOM', 'HONEYDEW', 'BLEND_HONEYDEW_BLOSSOM', 'CARVIA_CALLOSA', 'HEATHER', 'CITRUS_ROBINIA_ALFALFA', 'LAVENDER_BORAGE', 'TROPICAL_ORIGIN'];
+
+r.get('/ai/lab-analysis/options', requireRole('LAB_TESTER', 'ADMIN'), async (_req, res) => ok(res, await analysisOptions()));
+
+// "Submit Lab Report": the saved draft values are analysed automatically (standards + ML if validated + report)
+// and the laboratory outcome is ASSIGNED AUTOMATICALLY: PASS / FAIL submit the report; INCOMPLETE / ANALYSIS_ERROR keep it a draft.
+r.post('/lab/reports/:reportCode/analysis', requireRole('LAB_TESTER'),
+  validateBody(z.object({ honeyCategory: z.enum(HONEY_CATEGORIES) })), async (req, res) => {
+    const rep = await getReadableReport(req.user, req.params.reportCode);
+    const { analysis, reused, submission } = await runLabAnalysis(req.user, rep, req.valid.honeyCategory);
+    await logActivity(req, reused ? 'LAB_ANALYSIS_REUSED' : 'LAB_ANALYSIS_RUN', { type: 'lab_report', id: rep.lab_report_id, code: rep.report_code },
+      analysis.status === 'FAILED' ? 'FAILED' : 'SUCCESS',
+      { analysisCode: analysis.analysis_code, status: analysis.status, standardsStatus: analysis.standards_status, mlStatus: analysis.ml_status,
+        overallStatus: analysis.overall_status, automaticOutcome: analysis.automatic_outcome, failureReason: analysis.failure_reason,
+        attempts: analysis.attempts, autoSubmitted: Boolean(submission?.decision), batchStatus: submission?.batchStatus ?? null });
+    const view = await analysisView(await getReadableReport(req.user, req.params.reportCode));
+    (reused ? ok : created)(res, { ...view, reused, automaticOutcome: analysis.automatic_outcome, submission: submission ?? null });
+  });
+
+r.get('/lab/reports/:reportCode/analysis', requireRole('LAB_TESTER', 'ADMIN'), async (req, res) => {
+  ok(res, await analysisView(await getReadableReport(req.user, req.params.reportCode)));
+});
+
+r.get('/ai/models', requireRole('LAB_TESTER', 'ADMIN'), async (_req, res) => {
   const m = await ai.models();
   if (!m.ok) return ok(res, { available: false, error: m.error, models: [] });
   ok(res, { available: true, models: m.data.models });

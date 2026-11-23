@@ -9,6 +9,7 @@ import { ApiError } from '../utils/errors.js';
 import { ok, created, text, optText } from '../utils/http.js';
 import { logActivity } from '../services/activityLog.js';
 import { env, isTest } from '../config/env.js';
+import { getSetting } from '../services/settings.js';
 
 const r = Router();
 
@@ -58,6 +59,24 @@ r.post('/register-beekeeper', loginLimiter, validateBody(registerSchema), async 
   created(res, { user: toPublicUser(full) });
 });
 
+// Optional consumer account (verification works WITHOUT any account; this only keeps a history)
+r.post('/register-consumer', loginLimiter, validateBody(z.object({
+  email: z.string().trim().toLowerCase().email(),
+  password: passwordRule,
+  fullName: text(120),
+})), async (req, res) => {
+  if (!(await getSetting('consumer_registration_enabled'))) throw new ApiError(403, 'REGISTRATION_CLOSED', 'Consumer registration is currently disabled');
+  const v = req.valid;
+  const u = await one(
+    `INSERT INTO users (email, password_hash, full_name, role_code) VALUES ($1,$2,$3,'CONSUMER') RETURNING user_id`,
+    [v.email, await bcrypt.hash(v.password, 12), v.fullName]);
+  const full = await loadForSession(u.user_id);
+  issueSession(res, full);
+  req.user = toPublicUser(full);
+  await logActivity(req, 'CONSUMER_REGISTERED', { type: 'user', id: full.user_id });
+  created(res, { user: toPublicUser(full) });
+});
+
 async function loadForSession(userId) {
   return one(
     `SELECT u.*, o.name AS org_name, o.org_code, o.org_type, b.beekeeper_id
@@ -100,6 +119,22 @@ r.post('/logout', (req, res) => {
 });
 
 r.get('/me', requireAuth, (req, res) => ok(res, { user: req.user }));
+
+// Own account details (every role). Role / organization / email can only be changed by an admin.
+r.get('/me/profile', requireAuth, async (req, res) => {
+  ok(res, await one(
+    `SELECT u.user_id, u.email, u.full_name, u.phone, u.role_code, u.created_at, u.last_login_at,
+            o.org_code, o.name AS org_name, o.org_type, o.city AS org_city, o.state AS org_state
+       FROM users u LEFT JOIN organizations o ON o.org_id = u.org_id WHERE u.user_id = $1`, [req.user.id]));
+});
+
+r.patch('/me/profile', requireAuth, validateBody(z.object({ fullName: text(120).optional(), phone: optText(20) })), async (req, res) => {
+  await withTransaction(req.user.id, (c) => c.query(
+    `UPDATE users SET full_name = COALESCE($2, full_name), phone = CASE WHEN $3::boolean THEN $4 ELSE phone END WHERE user_id = $1`,
+    [req.user.id, req.valid.fullName ?? null, 'phone' in req.body, req.valid.phone ?? null]));
+  await logActivity(req, 'PROFILE_UPDATED', { type: 'user', id: req.user.id }, 'SUCCESS', { fields: Object.keys(req.body) });
+  ok(res, { updated: true });
+});
 
 r.post(
   '/change-password',

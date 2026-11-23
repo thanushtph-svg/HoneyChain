@@ -3,9 +3,11 @@
 Endpoints
   GET  /health
   GET  /models
-  POST /v1/quality/predict        lab measurements  -> quality model (if trained)
-  POST /v1/adulteration/predict   spectral observations -> adulteration model (if trained)
-  POST /v1/anomaly/score          batch feature records -> Isolation Forest scores (if enough records)
+  GET  /v1/standards              rule set used by the Standards-Based Laboratory Compliance Check
+  POST /v1/lab-analysis           PRIMARY lab workflow: standards check + Random Forest (if validated) + combined report
+  POST /v1/quality/predict        lab measurements  -> quality model (if trained)            [legacy, not in the lab workflow]
+  POST /v1/adulteration/predict   spectral observations -> adulteration model (if trained)   [retired from the lab workflow]
+  POST /v1/anomaly/score          batch feature records -> Isolation Forest scores (admin anomaly scan only)
 Auth: header X-Service-Key must equal AI_SERVICE_KEY from the project-root .env.
 """
 from __future__ import annotations
@@ -19,7 +21,9 @@ import numpy as np
 from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
+from . import standards_engine
 from .anomaly import score_isolation_forest
+from .lab_analysis import ML_MODEL_NAME, build_report
 from .registry import Registry
 
 
@@ -138,6 +142,47 @@ def predict_adulteration(body: AdulterationIn):
         },
         "reliability": m.manifest.get("reliability"),
     }
+
+
+# ------------------------------------------------------------------ combined lab analysis (primary workflow)
+class LabAnalysisIn(BaseModel):
+    labReportId: int = Field(ge=1)
+    labReportCode: str = Field(min_length=1, max_length=40)
+    batchId: int = Field(ge=1)
+    batchCode: str = Field(min_length=1, max_length=40)
+    honeyType: Optional[str] = Field(default=None, max_length=120)
+    honeyCategory: str
+    profile: str
+    referenceProfile: Optional[str] = None
+    measurements: dict[str, Optional[float]]
+
+
+@app.get("/v1/standards", dependencies=[Depends(require_key)])
+def standards():
+    return standards_engine.describe()
+
+
+@app.post("/v1/lab-analysis", dependencies=[Depends(require_key)])
+def lab_analysis(body: LabAnalysisIn):
+    rules = standards_engine.load_rules()
+    if body.profile not in rules["profiles"] or (body.referenceProfile and body.referenceProfile not in rules["profiles"]):
+        raise HTTPException(422, f"unknown standards profile; allowed: {sorted(rules['profiles'])}")
+    if body.honeyCategory not in rules["categories"]:
+        raise HTTPException(422, f"unknown honey category; allowed: {sorted(rules['categories'])}")
+    bad = [k for k, v in body.measurements.items() if v is not None and not np.isfinite(v)]
+    if bad:
+        raise HTTPException(422, f"non-finite measurement values: {bad}")
+    try:
+        return build_report(
+            context=body.model_dump(include={"labReportId", "labReportCode", "batchId", "batchCode", "honeyType"}),
+            measurements=body.measurements, category=body.honeyCategory, profile=body.profile,
+            reference_profile=body.referenceProfile if body.referenceProfile != body.profile else None,
+            ml_entry=registry.models.get(ML_MODEL_NAME),
+        )
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001 - never return a partial or fake report
+        raise HTTPException(500, f"REPORT_GENERATION_FAILED: {e}") from e
 
 
 # ------------------------------------------------------------------ anomaly

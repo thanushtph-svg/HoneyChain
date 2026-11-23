@@ -14,8 +14,11 @@
     "db:mongo-init": "node db/mongo-init.js",
     "db:seed": "node db/seeds/seed.js",
     "db:reset": "node db/reset.js",
-    "test": "node --test --test-concurrency=1 tests/canonical.test.js tests/workflow.test.js",
-    "test:unit": "node --test tests/canonical.test.js"
+    "test": "node --test --test-concurrency=1 tests/canonical.test.js tests/workflow.test.js tests/labCsv.test.js",
+    "test:unit": "node --test tests/canonical.test.js",
+    "admin:create": "node db/create-admin.js",
+    "test:lab-csv": "node --test tests/labCsv.test.js",
+    "lab-csv": "node scripts/lab-csv-fixtures.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

@@ -5,8 +5,18 @@ Internal FastAPI service, called only by the Express backend with the `X-Service
 ```powershell
 .\.venv\Scripts\Activate.ps1
 uvicorn app.main:app --host 127.0.0.1 --port 8000
-python -m pytest -q          # 11 tests
+python -m pytest -q          # 27 tests
 ```
+
+## Primary lab workflow: automatic laboratory analysis
+
+`POST /v1/lab-analysis` is called by the backend whenever a lab tester clicks **Submit Lab Report**. It returns one combined report:
+
+1. **Standards-Based Laboratory Compliance Check** (`app/standards_engine.py`, rules in `standards/honey_standards.json`): FSSAI reg. 2.8.3 limits, verified against the FSSAI Chapter 2.8 text on 2026-11-23, with honey-type exceptions (honeydew, Carvia callosa, blends). Codex CXS 12-1981 is shown as a separate reference. Each parameter returns PASS / FAIL / NOT_PROVIDED / IMPLAUSIBLE / NOT_APPLICABLE. Status: ALL_PASSED / FAILED / INCOMPLETE.
+2. **Random Forest** (`honey-quality`): used only if a validated model exists and every feature it needs is present. Missing inputs are never invented. It is currently **NOT_TRAINED**: no genuine labelled dataset could be verified (see `models/honey-quality/STATUS.json`).
+3. **Report generator** (`app/lab_analysis.py`): predefined wording, no LLM. Contains warnings, recommendations and the human-review status.
+
+The hyperspectral adulteration model and Isolation Forest are **not** part of the lab workflow. They stay available below for reference and for the admin anomaly scan.
 
 ## Model status
 

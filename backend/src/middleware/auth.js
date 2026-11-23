@@ -4,6 +4,7 @@ import { env } from '../config/env.js';
 import { one } from '../db/pg.js';
 import { ApiError, forbidden } from '../utils/errors.js';
 import { logActivity } from '../services/activityLog.js';
+import { HOME_PATH } from '../config/roles.js';
 
 export const COOKIE_NAME = 'hc_session';
 
@@ -44,6 +45,7 @@ export function toPublicUser(u) {
     role: u.role_code,
     organization: u.org_id ? { id: u.org_id, code: u.org_code, name: u.org_name, type: u.org_type } : null,
     beekeeperId: u.beekeeper_id ?? null,
+    homePath: HOME_PATH[u.role_code] ?? '/',
   };
 }
 
@@ -64,7 +66,22 @@ export async function requireAuth(req, _res, next) {
   next();
 }
 
-/** requireRole('ADMIN', 'LAB') - must come after requireAuth. */
+/** Like requireAuth but never fails: sets req.user when a valid session exists (public pages). */
+export async function optionalAuth(req, _res, next) {
+  if (req.user) return next();
+  const token = req.cookies?.[COOKIE_NAME];
+  if (!token) return next();
+  try {
+    const payload = jwt.verify(token, env.JWT_SECRET);
+    const u = await loadUser(Number(payload.sub));
+    if (u && u.is_active) req.user = { ...toPublicUser(u), orgId: u.org_id };
+  } catch {
+    /* anonymous visitor */
+  }
+  next();
+}
+
+/** requireRole('ADMIN', 'LAB_TESTER') - must come after requireAuth. */
 export function requireRole(...roles) {
   return (req, _res, next) => {
     if (!req.user) return next(new ApiError(401, 'UNAUTHENTICATED', 'Please log in'));

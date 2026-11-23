@@ -80,8 +80,8 @@ SELECT batch_code, entity_type, entity_code, anchor_status, block_number, last_r
 SELECT batch_code, producer_name, origin_district, harvest_date, lab_name, moisture_pct, lab_decision, processor_name
   FROM v_public_batch ORDER BY batch_code;
 
--- Q12 Index use: the lab queue uses the partial index batches_lab_queue_idx
-EXPLAIN SELECT batch_code FROM batches WHERE assigned_lab_id = 1 AND status IN ('CREATED','IN_TESTING');
+-- Q12 Index use: the lab's incoming testing requests use lab_requests_lab_idx (lab_org_id, status)
+EXPLAIN SELECT request_code FROM lab_test_requests WHERE lab_org_id = 1 AND status = 'PENDING';
 
 -- Q13 Transaction demo: an over-allocation is rolled back as a whole
 BEGIN;

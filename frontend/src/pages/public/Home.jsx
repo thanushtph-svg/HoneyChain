@@ -3,13 +3,14 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Async, Badge, useApi, fmtDate } from '../../components/ui.jsx';
 import { Logo } from '../../layouts/DashboardLayout.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { homeFor } from '../../roles.js';
 
 export function PublicTop() {
   const { user } = useAuth();
   return (
     <header className="public-top">
       <Link to="/" className="brand" style={{ margin: 0, color: '#fff' }}><Logo /> HoneyChain</Link>
-      {user ? <Link to="/app">Dashboard</Link> : <Link to="/login">Staff &amp; beekeeper login</Link>}
+      <nav className="public-links"><Link to="/verify">Scan a QR code</Link>{user ? <Link to={homeFor(user.role)}>My dashboard</Link> : <Link to="/login">Sign in</Link>}</nav>
     </header>
   );
 }
@@ -29,6 +30,7 @@ export default function Home() {
             <input aria-label="Batch code" placeholder="e.g. HC-2026-000001" value={code} onChange={(e) => setCode(e.target.value)}
               style={{ padding: '9px 12px', borderRadius: 9, border: 'none', minWidth: 240, font: 'inherit' }} />
             <button className="btn">Verify batch</button>
+            <Link className="btn secondary" to="/verify">Scan QR code</Link>
           </form>
         </section>
         <section className="card">

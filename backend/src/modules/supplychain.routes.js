@@ -1,4 +1,5 @@
-// Processor and distributor modules.
+// Processor (processing records) and distributor (shipments, delivery status) modules.
+// Custody hand-overs are in transfers.routes.js; laboratory testing requests in lab.routes.js.
 import { Router } from 'express';
 import { z } from 'zod';
 import { query, one, withTransaction } from '../db/pg.js';
@@ -8,25 +9,116 @@ import { ok, created, text, optText, isoDate, decimal, code, intRange, pageQuery
 import { notFound, conflict, unprocessable } from '../utils/errors.js';
 import { logActivity } from '../services/activityLog.js';
 import { createPendingAnchor } from '../services/anchorService.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// Processing method definitions (the six existing method codes + method-specific fields), served to the UI
+const METHOD_CFG = JSON.parse(fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../config/processing_methods.json'), 'utf8'));
+export const PROCESSING_METHODS = METHOD_CFG.methods;
+const METHOD_BY_CODE = Object.fromEntries(PROCESSING_METHODS.map((m) => [m.code, m]));
 
 const r = Router();
 r.use(['/processing', '/distribution', '/shipments'], requireAuth);
 
 // ================================================================ PROCESSING
-r.get('/processing/queue', requireRole('PROCESSOR'), async (_req, res) => {
+// Batches this processing unit has ACCEPTED and not yet processed
+r.get('/processing/queue', requireRole('PROCESSOR'), async (req, res) => {
   const { rows } = await query(
     `SELECT b.batch_id, b.batch_code, b.quantity_kg, b.honey_type, b.status, b.is_demo,
-            h.harvest_code, h.harvest_date, h.floral_source,
-            lr.report_code, lr.tested_on, lr.moisture_pct, lr.hmf_mg_kg, lr.sucrose_g_100g, lr.adulteration_result, lr.decision,
-            o.name AS lab_name
-       FROM batches b JOIN harvests h ON h.harvest_id = b.harvest_id
-       JOIN lab_reports lr ON lr.batch_id = b.batch_id AND lr.report_state = 'SUBMITTED'
-       JOIN organizations o ON o.org_id = lr.lab_org_id
-      WHERE b.status = 'LAB_PASSED' ORDER BY lr.submitted_at`);
+            h.harvest_code, h.harvest_date, h.floral_source, hv.district, hv.state,
+            bk.public_display_name AS beekeeper_name, t.transfer_code, t.responded_at AS received_at,
+            (SELECT count(*)::int FROM processing_steps s WHERE s.batch_id = b.batch_id) AS steps_saved
+       FROM batches b JOIN harvests h ON h.harvest_id = b.harvest_id JOIN hives hv ON hv.hive_id = h.hive_id
+       JOIN beekeepers bk ON bk.beekeeper_id = hv.beekeeper_id
+       JOIN batch_transfers t ON t.batch_id = b.batch_id AND t.transfer_type = 'TO_PROCESSOR' AND t.status = 'ACCEPTED'
+      WHERE b.status = 'IN_PROCESSING' AND t.to_org_id = $1
+      ORDER BY t.responded_at`, [req.user.orgId]);
   ok(res, rows);
 });
 
-const PROC_METHODS = ['FILTRATION', 'STRAINING', 'SETTLING', 'GENTLE_WARMING', 'CREAMING', 'OTHER'];
+const PROC_METHODS = PROCESSING_METHODS.map((m) => m.code);
+
+r.get('/processing/methods', requireRole('PROCESSOR', 'ADMIN'), (_req, res) => ok(res, PROCESSING_METHODS));
+
+/** Batch in this unit's custody (any status) or 404 */
+async function custodyBatch(user, batchCode, c = null) {
+  const sql = 'SELECT batch_id, batch_code, status, quantity_kg, batch_processor_org(batch_id) AS proc FROM batches WHERE batch_code = $1' + (c ? ' FOR UPDATE' : '');
+  const b = c ? (await c.query(sql, [batchCode.toUpperCase()])).rows[0] : await one(sql, [batchCode.toUpperCase()]);
+  if (!b || (user.role === 'PROCESSOR' && b.proc !== user.orgId)) throw notFound('Batch');
+  return b;
+}
+const STEP_SELECT = 'SELECT s.*, u.full_name AS recorded_by_name FROM processing_steps s JOIN users u ON u.user_id = s.recorded_by';
+
+// Saved processing steps of a batch (several methods per batch; each saved independently)
+r.get('/processing/batches/:batchCode/steps', requireRole('PROCESSOR', 'ADMIN'), async (req, res) => {
+  const b = await custodyBatch(req.user, req.params.batchCode);
+  const steps = (await query(STEP_SELECT + ' WHERE s.batch_id = $1 ORDER BY s.step_no', [b.batch_id])).rows;
+  const finalRec = await one('SELECT processing_code, created_at FROM processing_records WHERE batch_id = $1', [b.batch_id]);
+  ok(res, { batchCode: b.batch_code, batchStatus: b.status, finalized: Boolean(finalRec), processingCode: finalRec?.processing_code ?? null,
+    finalizedAt: finalRec?.created_at ?? null, steps });
+});
+
+function validateStepParameters(method, parameters = {}, details) {
+  const def = METHOD_BY_CODE[method];
+  const errors = [];
+  const clean = {};
+  for (const fd of def.fields) {
+    const raw = parameters[fd.key];
+    if (raw == null || raw === '') {
+      if (fd.required) errors.push(fd.label + ' (' + fd.unit + ') is required for ' + def.label);
+      continue;
+    }
+    const x = Number(raw);
+    if (!Number.isFinite(x) || x < fd.min || x > fd.max) errors.push(fd.label + ' must be between ' + fd.min + ' and ' + fd.max + ' ' + fd.unit);
+    else clean[fd.key] = x;
+  }
+  const unknown = Object.keys(parameters).filter((k) => !def.fields.some((fd) => fd.key === k));
+  if (unknown.length) errors.push('Unknown fields for ' + def.label + ': ' + unknown.join(', '));
+  if (def.requiresDetails && !(details && details.trim().length >= 5)) errors.push('Describe the ' + def.label + ' step in the details (at least 5 characters)');
+  if (errors.length) throw unprocessable('VALIDATION_ERROR', errors.join('; '), { errors });
+  return clean;
+}
+
+// Save ONE processing step. Never finalizes: the batch stays IN_PROCESSING.
+r.post('/processing/batches/:batchCode/steps', requireRole('PROCESSOR'), validateBody(z.object({
+  method: z.enum(PROCESSING_METHODS.map((m) => m.code)),
+  stepDate: isoDate,
+  details: optText(1000),
+  parameters: z.record(z.string(), z.union([z.number(), z.string(), z.null()])).optional(),
+})), async (req, res) => {
+  const v = req.valid;
+  const params = validateStepParameters(v.method, v.parameters ?? {}, v.details);
+  const step = await withTransaction(req.user.id, async (c) => {
+    const b = await custodyBatch(req.user, req.params.batchCode, c);
+    if (b.status !== 'IN_PROCESSING') throw conflict('PROCESSING_FINALIZED', 'Batch is ' + b.status + '; steps can only be added while it is IN_PROCESSING');
+    const n = (await c.query('SELECT COALESCE(max(step_no), 0) + 1 AS n FROM processing_steps WHERE batch_id = $1', [b.batch_id])).rows[0].n;
+    return (await c.query(
+      'INSERT INTO processing_steps (batch_id, processor_org_id, recorded_by, step_no, method, step_date, details, parameters) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
+      [b.batch_id, req.user.orgId, req.user.id, n, v.method, v.stepDate, v.details, JSON.stringify(params)])).rows[0];
+  });
+  await logActivity(req, 'PROCESSING_STEP_SAVED', { type: 'processing_step', id: step.step_id, code: step.step_code }, 'SUCCESS',
+    { batchCode: req.params.batchCode.toUpperCase(), method: v.method, stepNo: step.step_no, parameters: params });
+  created(res, step);
+});
+
+// Remove a mistaken step (only before finalization; enforced by the database too)
+r.delete('/processing/batches/:batchCode/steps/:stepCode', requireRole('PROCESSOR'), async (req, res) => {
+  const out = await withTransaction(req.user.id, async (c) => {
+    const b = await custodyBatch(req.user, req.params.batchCode, c);
+    const del = (await c.query('DELETE FROM processing_steps WHERE batch_id = $1 AND step_code = $2 RETURNING step_code, method',
+      [b.batch_id, req.params.stepCode.toUpperCase()])).rows[0];
+    if (!del) throw notFound('Processing step');
+    return del;
+  });
+  await logActivity(req, 'PROCESSING_STEP_REMOVED', { type: 'processing_step', code: out.step_code }, 'SUCCESS',
+    { batchCode: req.params.batchCode.toUpperCase(), method: out.method });
+  ok(res, { removed: out.step_code });
+});
+
+const fmtParams = (m, p) => METHOD_BY_CODE[m].fields.filter((fd) => p[fd.key] != null)
+  .map((fd) => fd.label.toLowerCase() + ' ' + p[fd.key] + ' ' + fd.unit).join(', ');
+const isoDay = (d) => (d instanceof Date ? d.toISOString() : String(d)).slice(0, 10);
 const PACKAGING = ['GLASS_JAR', 'PET_JAR', 'SACHET', 'TIN', 'BULK_DRUM', 'OTHER'];
 
 r.post(
@@ -35,7 +127,7 @@ r.post(
   validateBody(z.object({
     batchCode: code,
     processingDate: isoDate,
-    method: z.enum(PROC_METHODS),
+    method: z.enum(PROC_METHODS).optional(), // legacy single-method clients; the UI saves steps first
     methodDetails: optText(1000),
     operatorName: text(120),
     operatorStaffId: optText(40),
@@ -50,9 +142,27 @@ r.post(
   async (req, res) => {
     const v = req.valid;
     const rec = await withTransaction(req.user.id, async (c) => {
-      const b = (await c.query('SELECT batch_id, status FROM batches WHERE batch_code = $1 FOR UPDATE', [v.batchCode])).rows[0];
-      if (!b) throw notFound('Batch');
-      if (b.status !== 'LAB_PASSED') throw conflict('BATCH_NOT_PROCESSABLE', `Batch is ${b.status}; only LAB_PASSED batches can be processed`);
+      const b = (await c.query('SELECT batch_id, status, batch_processor_org(batch_id) AS proc FROM batches WHERE batch_code = $1 FOR UPDATE', [v.batchCode])).rows[0];
+      if (!b || b.proc !== req.user.orgId) throw notFound('Batch');
+      if (b.status !== 'IN_PROCESSING') {
+        throw conflict('BATCH_NOT_PROCESSABLE', `Batch is ${b.status}; only batches your unit has accepted (IN_PROCESSING) can be processed`);
+      }
+      // Explicit "Finalize Processing": needs at least one saved step (a legacy single-method call is saved as step 1)
+      let steps = (await c.query('SELECT * FROM processing_steps WHERE batch_id = $1 ORDER BY step_no', [b.batch_id])).rows;
+      if (!steps.length && v.method) {
+        if (v.method === 'OTHER') validateStepParameters(v.method, {}, v.methodDetails ?? '');
+        steps = (await c.query(
+          'INSERT INTO processing_steps (batch_id, processor_org_id, recorded_by, step_no, method, step_date, details) VALUES ($1,$2,$3,1,$4,$5,$6) RETURNING *',
+          [b.batch_id, req.user.orgId, req.user.id, v.method, v.processingDate, v.methodDetails])).rows;
+      }
+      if (!steps.length) throw unprocessable('NO_PROCESSING_STEPS', 'Save at least one processing step (method) before finalizing processing');
+      const summary = steps.map((st) => {
+        const p = fmtParams(st.method, st.parameters ?? {});
+        return st.step_no + ') ' + st.method + ' on ' + isoDay(st.step_date) + (p ? ' (' + p + ')' : '') + (st.details ? ' - ' + st.details : '');
+      }).join('; ');
+      const notes = req.valid.methodDetails && !steps.some((st) => st.details === req.valid.methodDetails) ? '. Notes: ' + req.valid.methodDetails : '';
+      v.method = steps[0].method;
+      v.methodDetails = 'Steps: ' + summary + notes;
       const row = (await c.query(
         `INSERT INTO processing_records (batch_id, processor_org_id, recorded_by, processing_date, method, method_details,
             operator_name, operator_staff_id, input_quantity_kg, output_quantity_kg, packaging_date, packaging_type,
@@ -64,8 +174,10 @@ r.post(
       const anchor = await createPendingAnchor(c, { entity_type: 'PROCESSING_RECORD', batch_id: b.batch_id, processing_id: row.processing_id }, req.user.id);
       return { ...row, anchor_queued: Boolean(anchor) };
     });
-    await logActivity(req, 'PROCESSING_RECORDED', { type: 'processing', id: rec.processing_id, code: rec.processing_code }, 'SUCCESS', { batchCode: v.batchCode });
-    created(res, { ...rec, batch_code: v.batchCode });
+    const lossKg = Number(v.inputQuantityKg) - Number(v.outputQuantityKg);
+    await logActivity(req, 'PROCESSING_RECORDED', { type: 'processing', id: rec.processing_id, code: rec.processing_code }, 'SUCCESS',
+      { batchCode: v.batchCode, inputKg: v.inputQuantityKg, outputKg: v.outputQuantityKg, lossKg: lossKg.toFixed(2) });
+    created(res, { ...rec, batch_code: v.batchCode, loss_kg: lossKg.toFixed(2) });
   },
 );
 
@@ -74,7 +186,8 @@ r.get('/processing', requireRole('PROCESSOR', 'ADMIN'), validateQuery(z.object({
   const params = [req.user.role === 'PROCESSOR' ? req.user.orgId : null];
   const { limit, offset } = paging(q);
   const { rows } = await query(
-    `SELECT p.*, b.batch_code, o.name AS processor_name, u.full_name AS recorded_by_name
+    `SELECT p.*, (p.input_quantity_kg - p.output_quantity_kg) AS loss_kg, b.batch_code, b.status AS batch_status,
+            o.name AS processor_name, u.full_name AS recorded_by_name
        FROM processing_records p JOIN batches b ON b.batch_id = p.batch_id
        JOIN organizations o ON o.org_id = p.processor_org_id JOIN users u ON u.user_id = p.recorded_by
       WHERE ($1::int IS NULL OR p.processor_org_id = $1) ORDER BY p.processing_id DESC LIMIT ${limit} OFFSET ${offset}`, params);
@@ -93,15 +206,18 @@ r.get('/processing/:processingCode', requireRole('PROCESSOR', 'ADMIN'), async (r
 });
 
 // ================================================================ DISTRIBUTION
-r.get('/distribution/queue', requireRole('DISTRIBUTOR'), async (_req, res) => {
+// Batches this distributor has ACCEPTED that still have packed units to ship
+r.get('/distribution/queue', requireRole('DISTRIBUTOR'), async (req, res) => {
   const { rows } = await query(
     `SELECT b.batch_id, b.batch_code, b.honey_type, b.status, b.is_demo,
-            p.processing_code, p.packaging_type, p.unit_size_g, p.units_packed, p.packaging_date, o.name AS processor_name, o.city AS processor_city,
+            p.processing_code, p.packaging_type, p.unit_size_g, p.units_packed, p.packaging_date, p.best_before,
+            o.name AS processor_name, o.city AS processor_city,
+            (SELECT lr.decision FROM lab_reports lr WHERE lr.lab_report_id = batch_current_report(b.batch_id)) AS lab_decision,
             p.units_packed - COALESCE((SELECT sum(s.units_shipped) FROM shipments s WHERE s.batch_id = b.batch_id AND s.status <> 'CANCELLED'), 0) AS units_remaining
        FROM batches b JOIN processing_records p ON p.batch_id = b.batch_id JOIN organizations o ON o.org_id = p.processor_org_id
-      WHERE b.status IN ('PROCESSED','IN_DISTRIBUTION')
+      WHERE b.status = 'IN_DISTRIBUTION' AND batch_distributor_org(b.batch_id) = $1
         AND p.units_packed > COALESCE((SELECT sum(s.units_shipped) FROM shipments s WHERE s.batch_id = b.batch_id AND s.status <> 'CANCELLED'), 0)
-      ORDER BY p.packaging_date`);
+      ORDER BY p.packaging_date`, [req.user.orgId]);
   ok(res, rows);
 });
 
@@ -125,17 +241,15 @@ r.post(
   async (req, res) => {
     const v = req.valid;
     const s = await withTransaction(req.user.id, async (c) => {
-      const b = (await c.query('SELECT batch_id, status FROM batches WHERE batch_code = $1 FOR UPDATE', [v.batchCode])).rows[0];
-      if (!b) throw notFound('Batch');
-      if (!['PROCESSED', 'IN_DISTRIBUTION'].includes(b.status)) throw conflict('BATCH_NOT_DISPATCHABLE', `Batch is ${b.status}`);
-      const row = (await c.query(
+      const b = (await c.query('SELECT batch_id, status, batch_distributor_org(batch_id) AS dist FROM batches WHERE batch_code = $1 FOR UPDATE', [v.batchCode])).rows[0];
+      if (!b || b.dist !== req.user.orgId) throw notFound('Batch');
+      if (b.status !== 'IN_DISTRIBUTION') throw conflict('BATCH_NOT_DISPATCHABLE', `Batch is ${b.status}; accept the transfer first`);
+      return (await c.query(
         `INSERT INTO shipments (batch_id, distributor_org_id, recorded_by, dispatch_date, origin_location, destination_name,
             destination_type, destination_city, destination_state, carrier_name, tracking_reference, units_shipped)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
         [b.batch_id, req.user.orgId, req.user.id, v.dispatchDate, v.originLocation, v.destinationName, v.destinationType,
          v.destinationCity, v.destinationState, v.carrierName, v.trackingReference, v.unitsShipped])).rows[0];
-      if (b.status === 'PROCESSED') await c.query(`UPDATE batches SET status = 'IN_DISTRIBUTION' WHERE batch_id = $1`, [b.batch_id]);
-      return row;
     });
     await logActivity(req, 'SHIPMENT_DISPATCHED', { type: 'shipment', id: s.shipment_id, code: s.shipment_code }, 'SUCCESS', { batchCode: v.batchCode, units: v.unitsShipped });
     created(res, { ...s, batch_code: v.batchCode });
@@ -182,11 +296,12 @@ r.patch(
 );
 
 r.get('/shipments', requireRole('DISTRIBUTOR', 'ADMIN'),
-  validateQuery(z.object({ ...pageQuery, status: z.enum(['DISPATCHED', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED']).optional() })),
+  validateQuery(z.object({ ...pageQuery, status: z.string().trim().max(60).optional()
+    .refine((s) => !s || s.split(',').every((x) => ['DISPATCHED', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED'].includes(x)), 'Unknown status') })),
   async (req, res) => {
     const q = req.validQuery;
-    const params = [req.user.role === 'DISTRIBUTOR' ? req.user.orgId : null, q.status ?? null];
-    const where = '($1::int IS NULL OR s.distributor_org_id = $1) AND ($2::text IS NULL OR s.status = $2)';
+    const params = [req.user.role === 'DISTRIBUTOR' ? req.user.orgId : null, q.status ? q.status.split(',') : null];
+    const where = '($1::int IS NULL OR s.distributor_org_id = $1) AND ($2::text[] IS NULL OR s.status = ANY($2))';
     const { limit, offset } = paging(q);
     const { rows } = await query(
       `SELECT s.*, b.batch_code, o.name AS distributor_name FROM shipments s JOIN batches b ON b.batch_id = s.batch_id

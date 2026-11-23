@@ -1,9 +1,47 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { post } from '../../api/client.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { ErrorBox, Field, useAction, useForm } from '../../components/ui.jsx';
 import { Logo } from '../../layouts/DashboardLayout.jsx';
+import { homeFor } from '../../roles.js';
+
+// Optional consumer account: verification works without it; it only keeps a personal history.
+function ConsumerRegister() {
+  const { refresh } = useAuth();
+  const nav = useNavigate();
+  const a = useAction();
+  const f = useForm({ email: '', password: '', fullName: '' });
+  return (
+    <div className="auth-wrap">
+      <div className="card auth-card">
+        <div className="brand" style={{ color: 'var(--ink)', margin: '0 0 10px' }}><Logo /> HoneyChain</div>
+        <h1>Consumer account</h1>
+        <p className="muted">Optional. You can verify any product without an account; an account keeps a history of the products you checked.</p>
+        <ErrorBox error={a.error} />
+        <form className="grid" onSubmit={async (e) => {
+          e.preventDefault();
+          const r = await a.run(() => post('/auth/register-consumer', f.values));
+          if (r) { await refresh(); nav(homeFor('CONSUMER')); }
+        }}>
+          <Field label="Name"><input required {...f.bind('fullName')} /></Field>
+          <Field label="Email"><input type="email" autoComplete="username" required {...f.bind('email')} /></Field>
+          <Field label="Password" hint="At least 8 characters with a letter and a digit"><input type="password" autoComplete="new-password" required {...f.bind('password')} /></Field>
+          <button className="btn" disabled={a.busy}>{a.busy ? 'Creating account...' : 'Create account'}</button>
+        </form>
+        <p style={{ marginTop: 14 }}><Link to="/login">I already have an account</Link>
+            <Link to="/register?type=consumer">I am a consumer</Link> · <Link to="/register">I am a beekeeper</Link> · <Link to="/verify">Verify without an account</Link></p>
+      </div>
+    </div>
+  );
+}
 
 export default function Register() {
+  const [sp] = useSearchParams();
+  if (sp.get('type') === 'consumer') return <ConsumerRegister />;
+  return <BeekeeperRegister />;
+}
+
+function BeekeeperRegister() {
   const { register } = useAuth();
   const nav = useNavigate();
   const a = useAction();
@@ -16,7 +54,7 @@ export default function Register() {
     e.preventDefault();
     const v = f.values;
     const u = await a.run(() => register({ ...v, publicDisplayName: v.publicDisplayName || v.fullName }));
-    if (u) nav('/app');
+    if (u) nav(homeFor(u.role));
   };
 
   return (

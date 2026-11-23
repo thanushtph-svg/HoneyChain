@@ -17,7 +17,17 @@ export const unavailable = (code, msg) => new ApiError(503, code, msg);
 // Friendly text for named constraints (shown instead of raw PostgreSQL messages)
 const CONSTRAINT_MESSAGES = {
   users_email_lower_uq: 'An account with this email already exists',
-  users_org_matches_role: 'Staff roles must belong to an organization; admins and beekeepers must not',
+  users_org_matches_role: 'Lab testers, processors and distributors must belong to an organization; admins, beekeepers and consumers must not',
+  transfers_one_pending_uq: 'This batch already has a transfer waiting for a response',
+  transfers_one_accepted_uq: 'This batch has already been accepted by an organization of this type',
+  transfer_reject_has_reason: 'A reason is required when rejecting or cancelling a transfer',
+  lab_requests_one_open_uq: 'This batch already has an open testing request',
+  request_reject_has_reason: 'A reason is required when rejecting or cancelling a testing request',
+  lab_reports_one_final_uq: 'This batch already has a final (PASS/FAIL) laboratory result',
+  corrections_one_pending_uq: 'This report already has a correction waiting for review',
+  correction_not_self_reviewed: 'A correction cannot be reviewed by the person who requested it',
+  lab_report_documents_lab_report_id_sha256_key: 'This exact document is already attached to the report',
+  lab_report_corrections_reason_check: 'Give a reason of at least 10 characters',
   organizations_name_org_type_key: 'An organization with this name and type already exists',
   lab_reports_lab_org_id_sample_code_key: 'This sample code is already used by your laboratory',
   lab_reports_one_draft_uq: 'This batch already has an open draft report',

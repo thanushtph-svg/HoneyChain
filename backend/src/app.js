@@ -21,6 +21,9 @@ import labRoutes from './modules/lab.routes.js';
 import aiRoutes from './modules/ai.routes.js';
 import supplyRoutes from './modules/supplychain.routes.js';
 import adminRoutes from './modules/admin.routes.js';
+import transferRoutes from './modules/transfers.routes.js';
+import { BATCH_STATUSES } from './modules/batches.routes.js';
+import { ALL_ROLES } from './config/roles.js';
 
 export function createApp() {
   const app = express();
@@ -47,13 +50,16 @@ export function createApp() {
       packagingTypes: ['GLASS_JAR', 'PET_JAR', 'SACHET', 'TIN', 'BULK_DRUM', 'OTHER'],
       destinationTypes: ['WAREHOUSE', 'DISTRIBUTOR', 'RETAILER', 'INSTITUTION', 'OTHER'],
       adulterationResults: ['NOT_DETECTED', 'DETECTED', 'INCONCLUSIVE', 'NOT_TESTED'],
-      batchStatuses: ['CREATED', 'IN_TESTING', 'LAB_PASSED', 'LAB_FAILED', 'PROCESSED', 'IN_DISTRIBUTION', 'DELIVERED'],
+      batchStatuses: BATCH_STATUSES,
+      labDecisions: ['PASS', 'FAIL', 'INCONCLUSIVE'],
+      roles: ALL_ROLES,
     }));
 
   api.use('/auth', authRoutes);
   api.use(publicRoutes);
   api.use(beekeeperRoutes);
   api.use(batchRoutes);
+  api.use(transferRoutes);
   api.use(labRoutes);
   api.use(aiRoutes);
   api.use(supplyRoutes);

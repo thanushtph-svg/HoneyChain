@@ -1,0 +1,54 @@
+{
+  "_comment": "Processing methods supported by HoneyChain. The six codes are the existing ones (processing_records.method / processing_steps.method CHECK). Field limits are HoneyChain data-entry validation, not regulatory limits.",
+  "methods": [
+    {
+      "code": "FILTRATION",
+      "label": "Filtration",
+      "instructions": "Pass the honey through a food-grade filter and record the mesh size. Very fine filtration removes pollen that origin testing relies on.",
+      "fields": [
+        { "key": "meshMicron", "label": "Filter mesh size", "unit": "µm", "type": "number", "min": 20, "max": 2000, "required": true }
+      ]
+    },
+    {
+      "code": "STRAINING",
+      "label": "Straining",
+      "instructions": "Coarse straining through a sieve or cloth to remove wax, bee parts and debris.",
+      "fields": [
+        { "key": "meshMicron", "label": "Strainer / cloth mesh size", "unit": "µm", "type": "number", "min": 100, "max": 5000, "required": true }
+      ]
+    },
+    {
+      "code": "SETTLING",
+      "label": "Settling",
+      "instructions": "Let the honey stand so air bubbles and fine wax rise to the top, then skim the surface.",
+      "fields": [
+        { "key": "durationHours", "label": "Settling time", "unit": "h", "type": "number", "min": 1, "max": 720, "required": true }
+      ]
+    },
+    {
+      "code": "GENTLE_WARMING",
+      "label": "Gentle warming",
+      "instructions": "Warm only enough to ease handling. HoneyChain accepts at most 45 °C: heating raises HMF and reduces enzyme activity.",
+      "fields": [
+        { "key": "temperatureC", "label": "Temperature", "unit": "°C", "type": "number", "min": 20, "max": 45, "required": true },
+        { "key": "durationHours", "label": "Duration", "unit": "h", "type": "number", "min": 0.1, "max": 72, "required": true }
+      ]
+    },
+    {
+      "code": "CREAMING",
+      "label": "Creaming",
+      "instructions": "Controlled crystallisation: mix in finely crystallised seed honey and stir at a cool temperature until creamy.",
+      "fields": [
+        { "key": "seedPercent", "label": "Seed honey added", "unit": "%", "type": "number", "min": 0, "max": 30, "required": false },
+        { "key": "durationDays", "label": "Creaming time", "unit": "days", "type": "number", "min": 1, "max": 60, "required": true }
+      ]
+    },
+    {
+      "code": "OTHER",
+      "label": "Other",
+      "instructions": "Any other processing step. Describe exactly what was done in the details.",
+      "requiresDetails": true,
+      "fields": []
+    }
+  ]
+}

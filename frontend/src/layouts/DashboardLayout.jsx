@@ -1,49 +1,11 @@
+// One layout component, rendered separately for each of the six roles: the sidebar shows ONLY that
+// role's navigation, and the whole view refuses to render for any other role (route guard).
+// The server enforces the same rules on every API call; this guard keeps the UI honest.
 import { useState } from 'react';
-import { NavLink, Outlet, useNavigate, Navigate, useLocation } from 'react-router-dom';
+import { Link, NavLink, Outlet, useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { Loading } from '../components/ui.jsx';
-
-const NAV = {
-  BEEKEEPER: [
-    ['Overview', '/app'],
-    ['My hives', '/app/hives'],
-    ['Harvests', '/app/harvests'],
-    ['Batches', '/app/batches'],
-    ['Profile', '/app/profile'],
-  ],
-  LAB: [
-    ['Overview', '/app'],
-    ['Testing queue', '/app/lab/queue'],
-    ['Testing history', '/app/lab/reports'],
-    ['Batches', '/app/batches'],
-    ['AI models', '/app/ai-models'],
-  ],
-  PROCESSOR: [
-    ['Overview', '/app'],
-    ['Processing queue', '/app/processing/queue'],
-    ['Processing history', '/app/processing'],
-    ['Batches', '/app/batches'],
-  ],
-  DISTRIBUTOR: [
-    ['Overview', '/app'],
-    ['Dispatch queue', '/app/distribution/queue'],
-    ['Shipments', '/app/shipments'],
-    ['Batches', '/app/batches'],
-  ],
-  ADMIN: [
-    ['System overview', '/app'],
-    ['Users', '/app/admin/users'],
-    ['Organizations', '/app/admin/organizations'],
-    ['Batches', '/app/batches'],
-    ['Records', '/app/admin/records'],
-    ['Anomalies', '/app/admin/anomalies'],
-    ['Blockchain', '/app/admin/blockchain'],
-    ['Activity logs', '/app/admin/logs'],
-    ['AI models', '/app/ai-models'],
-  ],
-};
-
-const ROLE_LABEL = { ADMIN: 'Administrator', BEEKEEPER: 'Beekeeper', LAB: 'Laboratory', PROCESSOR: 'Processor', DISTRIBUTOR: 'Distributor' };
+import { ROLES, homeFor, roleLabel } from '../roles.js';
 
 export function Logo() {
   return (
@@ -54,34 +16,53 @@ export function Logo() {
   );
 }
 
-export default function DashboardLayout() {
+/** Shown when a signed-in user opens another role's URL. */
+export function Forbidden({ user, wanted }) {
+  return (
+    <div className="auth-wrap">
+      <div className="card auth-card forbidden" role="alert">
+        <div className="brand" style={{ color: 'var(--ink)', margin: '0 0 10px' }}><Logo /> HoneyChain</div>
+        <h1>Access denied (403)</h1>
+        <p>This page belongs to the <strong>{roleLabel(wanted)}</strong> view. You are signed in as <strong>{roleLabel(user.role)}</strong>.</p>
+        <Link className="btn" to={homeFor(user.role)}>Go to my dashboard</Link>
+      </div>
+    </div>
+  );
+}
+
+export default function RoleLayout({ role }) {
   const { user, loading, logout } = useAuth();
   const [open, setOpen] = useState(false);
   const nav = useNavigate();
   const loc = useLocation();
   if (loading) return <Loading text="Checking your session..." />;
-  if (!user) return <Navigate to="/login" replace state={{ from: loc.pathname }} />;
+  if (!user) return <Navigate to="/login" replace state={{ from: loc.pathname + loc.search }} />;
+  if (user.role !== role) return <Forbidden user={user} wanted={role} />;
+  const cfg = ROLES[role];
 
   return (
-    <div className="shell">
+    <div className={`shell role-${role.toLowerCase()}`}>
       <aside className={`sidebar ${open ? 'open' : ''}`} onClick={() => setOpen(false)}>
         <div className="brand"><Logo /> HoneyChain</div>
-        <div className="nav-section">{ROLE_LABEL[user.role]}</div>
-        <nav className="nav">
-          {NAV[user.role].map(([label, to]) => (
-            <NavLink key={to} to={to} end={to === '/app' || to === '/app/processing'}>{label}</NavLink>
-          ))}
+        <div className="role-chip">{cfg.label} view</div>
+        <nav className="nav" aria-label={`${cfg.label} navigation`}>
+          {cfg.nav.map(([label, sub]) => {
+            const to = sub ? `${cfg.base}/${sub}` : cfg.base;
+            return <NavLink key={to} to={to} end={!sub}>{label}</NavLink>;
+          })}
         </nav>
-        <div className="nav-section">Public</div>
-        <nav className="nav">
-          <NavLink to="/" end>Consumer site</NavLink>
-        </nav>
+        {role !== 'CONSUMER' && (
+          <>
+            <div className="nav-section">Public</div>
+            <nav className="nav"><NavLink to="/verify">Product verification site</NavLink></nav>
+          </>
+        )}
       </aside>
       <div className="main">
         <header className="topbar">
           <button className="btn secondary small menu-btn" onClick={() => setOpen((o) => !o)} aria-label="Menu">Menu</button>
           <span className="who">
-            <strong>{user.fullName}</strong> · {ROLE_LABEL[user.role]}
+            <strong>{user.fullName}</strong> · {cfg.label}
             {user.organization ? ` · ${user.organization.name}` : ''}
           </span>
           <button className="btn secondary small" onClick={async () => { await logout(); nav('/login'); }}>Log out</button>
@@ -94,12 +75,9 @@ export default function DashboardLayout() {
   );
 }
 
-/** Route guard by role (the server enforces the same rules; this only keeps the UI tidy) */
-export function RequireRole({ roles, children }) {
-  const { user } = useAuth();
-  if (!user) return null;
-  if (!roles.includes(user.role)) {
-    return <div className="alert error">Your role ({user.role}) cannot open this page.</div>;
-  }
-  return children;
+/** Old /app links (bookmarks, printed instructions) go to the user's own dashboard. */
+export function LegacyAppRedirect() {
+  const { user, loading } = useAuth();
+  if (loading) return <Loading />;
+  return <Navigate to={user ? homeFor(user.role) : '/login'} replace />;
 }

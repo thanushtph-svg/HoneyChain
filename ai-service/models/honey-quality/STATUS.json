@@ -1,13 +1,28 @@
 {
   "status": "NOT_TRAINED",
-  "reason": "Not trained - validated labelled dataset required. The candidate source (Aykas 2023, Foods 12(3):523) publishes only summary statistics (min/max/mean/SD), not per-sample values, and has no quality-grade labels. Only rule-based standards screening is available.",
+  "model": "Random Forest classifier (lab measurements)",
+  "reason": "Not trained - validated labelled dataset required. No genuine, per-sample honey laboratory dataset with reference-lab or expert-verified class labels could be verified. The standards-based compliance check runs without it.",
+  "checked_on": "2026-11-23",
   "investigated": [
     {
-      "source": "Aykas D.P. (2023) Determination of Possible Adulteration and Quality Assessment in Commercial Honey. Foods 12(3):523. doi:10.3390/foods12030523",
-      "licence": "CC BY 3.0 (article)",
-      "finding": "Data Availability: 'Data is contained within the article.' The article contains summary statistics and calibration-model statistics only; no per-sample table and no supplementary data files. Its only classes are SIMCA 'pure' vs 'suspicious (sucrose > 5%)', i.e. a regulatory threshold rule, not a quality grade.",
-      "decision": "Unsuitable for training. Deriving labels from regulatory limits would only re-learn the threshold rule, which HoneyChain already applies transparently as rule-based screening."
+      "source": "Aykas D.P. (2023) Determination of Possible Adulteration and Quality Assessment in Commercial Honey. Foods 12(3):523. doi:10.3390/foods12030523 (PMC9914500), 147 commercial honeys",
+      "licence": "CC BY (article)",
+      "finding": "Earlier HoneyChain review of the article: data availability 'Data is contained within the article'; only summary statistics (min/max/mean/SD) and calibration statistics; no per-sample table or supplementary data file; its only classes are 'pure' vs 'suspicious (sucrose > 5%)', i.e. a regulatory threshold rule. Re-check on 2026-11-23 failed (PMC served a bot-check page, MDPI returned HTTP 403, Europe PMC returned HTTP 500), so the earlier finding stands unverified-again.",
+      "decision": "Unsuitable: no per-sample data; threshold-derived labels would only re-learn the standards rule."
+    },
+    {
+      "source": "Huyop F. (2026) Raw Data for Physicochemical, Antioxidant, and Sugar Composition Analyses of Selected Southeast Asian Honey Samples. Zenodo doi:10.5281/zenodo.20072146",
+      "licence": "CC BY 4.0",
+      "finding": "One .xlsx file (12.8 kB) of triplicate measurements (sugars incl. fructose/glucose/sucrose/maltose, phenolics, flavonoids, DPPH) for honeys from 4 named origins. Samples are labelled by geographic origin only; no quality/compliance/authenticity labels; HMF and free acidity not listed.",
+      "decision": "Unsuitable for a quality/compliance classifier: no verified quality labels, very few samples."
+    },
+    {
+      "source": "Other candidates seen in search (Zenodo 5717670 FTIR/PLS honey quality; Mendeley 6kxjzpkdvd Tanzanian honey; Zenodo 7844557 Butembo honey; Romanian acacia honey study PMC7691509)",
+      "licence": "various",
+      "finding": "Not verified as downloadable per-sample tables with reference-lab or expert class labels (PMC7691509 full text could not be retrieved: Europe PMC HTTP 500).",
+      "decision": "Not used. Can be re-evaluated with train_quality.py if a per-sample labelled file is obtained."
     }
   ],
-  "how_to_enable": "Provide a CSV following ai-service/data/README.md (quality section) with real per-sample measurements and a defensible label, then run: python training/train_quality.py --data <file> --label <column> --group <column>"
+  "required_data": "A CSV with one row per honey sample (or per replicate plus a sample id): at least 60 rows, at least 2 classes with >= 10 rows each, >= 10 distinct sample ids, >= 3 of moisture_pct, hmf_mg_kg, sucrose_g_100g, glucose_g_100g, fructose_g_100g, free_acidity_meq_kg, electrical_conductivity_ms_cm, ph, brix, water_activity, and a class label from a reference method (e.g. isotope/NMR authenticity result) or an expert panel - NOT derived from the same regulatory limits the standards check applies.",
+  "how_to_enable": "python training/train_quality.py --data <file.csv> --label <class column> --group <sample id column> --card <DATASET_CARD.md> --licence \"<licence>\" --source \"<url/doi>\""
 }

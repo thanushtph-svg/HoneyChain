@@ -1,5 +1,8 @@
 # 05 — REST API Contract
 
+> **Updated by migration 005 / the six-role redesign:** role `LAB` is now `LAB_TESTER`, a `CONSUMER` role exists, beekeepers no longer assign labs, and custody transfers, testing requests, documents, corrections, settings and role-management endpoints were added. The authoritative list of new and changed endpoints is in [10-role-based-views.md §4](10-role-based-views.md#4-api-added-or-changed-all-under-apiv1).
+
+
 Base URL: `http://localhost:4000/api/v1`. Bodies are JSON unless noted. Authentication uses the `hc_session` **httpOnly cookie** set by `/auth/login`.
 
 ## 0. Conventions

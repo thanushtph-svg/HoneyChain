@@ -1,6 +1,8 @@
 // Small reusable UI building blocks.
 import { useCallback, useEffect, useState } from 'react';
 import { get } from '../api/client.js';
+import { useAuth } from '../context/AuthContext.jsx';
+import { pathFor } from '../roles.js';
 
 /** Load data from the API: { data, meta, error, loading, reload } */
 export function useApi(path, deps = []) {
@@ -108,7 +110,14 @@ const STATUS_KIND = {
   NOT_DETECTED: 'ok', DETECTED: 'bad', INCONCLUSIVE: 'warn', NOT_TESTED: '', TRAINED: 'ok', NOT_TRAINED: 'warn',
   WITHIN_LIMIT: 'ok', EXCEEDS_LIMIT: 'bad', NOT_MEASURED: '', CRITICAL: 'bad', WARNING: 'warn', INFO: 'info',
   INSUFFICIENT_DATA: 'warn', SCORED: 'ok', SERVICE_UNAVAILABLE: 'bad', INPUT_INCOMPATIBLE: 'bad', SUBMITTED_TX: 'info',
+  PENDING_PROCESSOR: 'warn', IN_PROCESSING: 'honey', PENDING_LAB: 'warn', LAB_INCONCLUSIVE: 'warn', PENDING_DISTRIBUTOR: 'warn',
+  ACCEPTED: 'ok', REJECTED: 'bad', COMPLETED: 'ok', SUPERSEDED: '', APPROVED: 'ok', PARTIAL: 'warn', NOT_ANCHORED: '', UNAVAILABLE: 'warn',
+  TO_PROCESSOR: 'info', TO_DISTRIBUTOR: 'info', REVIEWED: 'ok', UNREVIEWED: '',
   ADULTERATION_SUSPECTED: 'bad', NO_ADULTERATION_DETECTED: 'ok', LOW: 'bad', MODERATE: 'warn', HIGH: 'ok',
+  // automatic lab analysis
+  ALL_PASSED: 'ok', INCOMPLETE: 'warn', COMPLETED_WITH_LIMITATIONS: 'warn', PREDICTION_AVAILABLE: 'ok', NOT_AVAILABLE: 'warn',
+  INSUFFICIENT_INPUT: 'warn', NOT_PROVIDED: 'warn', IMPLAUSIBLE: 'bad', NOT_APPLICABLE: '', PENDING_REVIEW: 'warn', STALE: 'warn',
+  FLAGGED_FOR_REVIEW: 'warn', LEGACY: '',
 };
 
 export function Badge({ value, kind, title }) {
@@ -226,6 +235,62 @@ export function Bars({ items, labelKey, valueKey, format = (v) => v }) {
           <strong>{format(i[valueKey])}</strong>
         </div>
       ))}
+    </div>
+  );
+}
+
+/** Link builder for the CURRENT user's own view: base('batches/HC-1') -> /processor/batches/HC-1 */
+export function useBase() {
+  const { user } = useAuth();
+  return (sub = '') => pathFor(user.role, sub);
+}
+
+/** Button that asks for confirmation, runs an async action and shows its error. */
+export function ConfirmButton({ confirm, onClick, children, kind = '', small = true, onDone }) {
+  const a = useAction();
+  return (
+    <span className="confirm-wrap">
+      <button type="button" className={`btn ${small ? 'small' : ''} ${kind}`} disabled={a.busy}
+        onClick={async () => {
+          if (confirm && !window.confirm(confirm)) return;
+          const r = await a.run(onClick);
+          if (r && onDone) onDone(r);
+        }}>
+        {a.busy ? 'Working...' : children}
+      </button>
+      {a.error && <span className="inline-error" role="alert">{a.error.message}</span>}
+    </span>
+  );
+}
+
+/** Opens an inline form that requires a written reason (rejections, cancellations, corrections). */
+export function ReasonAction({ label, placeholder = 'Reason (required)', confirm, onSubmit, onDone, kind = 'secondary', minLength = 5 }) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState('');
+  const a = useAction();
+  if (!open) return <button type="button" className={`btn small ${kind}`} onClick={() => setOpen(true)}>{label}</button>;
+  return (
+    <form className="inline-form" onSubmit={async (e) => {
+      e.preventDefault();
+      if (confirm && !window.confirm(confirm)) return;
+      const r = await a.run(() => onSubmit(reason.trim()));
+      if (r) { setOpen(false); setReason(''); onDone?.(r); }
+    }}>
+      <textarea aria-label={label} required minLength={minLength} placeholder={placeholder} value={reason} onChange={(e) => setReason(e.target.value)} />
+      <ErrorBox error={a.error} />
+      <div className="btn-row">
+        <button className="btn small" disabled={a.busy}>{a.busy ? 'Saving...' : `Confirm: ${label}`}</button>
+        <button type="button" className="btn small secondary" onClick={() => setOpen(false)}>Cancel</button>
+      </div>
+    </form>
+  );
+}
+
+/** Simple tabs */
+export function Tabs({ tabs, value, onChange }) {
+  return (
+    <div className="tabs" role="tablist">
+      {tabs.map(([k, label]) => <button key={k} role="tab" aria-selected={value === k} className={value === k ? 'active' : ''} onClick={() => onChange(k)}>{label}</button>)}
     </div>
   );
 }

@@ -3,35 +3,106 @@
   "database": "honeychain",
   "collections": {
     "ai_analysis_results": {
-      "purpose": "One document per AI analysis request (quality OR adulteration). Shape varies by model, version and status, so a document store fits better than a fixed table.",
+      "purpose": "One document per AI analysis. LAB_ANALYSIS = the compulsory combined laboratory analysis report (primary workflow); QUALITY / ADULTERATION = legacy manual analyses.",
       "validator": {
         "$jsonSchema": {
           "bsonType": "object",
-          "required": ["analysisType", "batchId", "batchCode", "labReportId", "standardsScreening", "model", "disclaimer", "requestedBy", "createdAt", "review", "isDemo"],
+          "required": [
+            "analysisType",
+            "batchId",
+            "batchCode",
+            "labReportId",
+            "standardsScreening",
+            "model",
+            "disclaimer",
+            "requestedBy",
+            "createdAt",
+            "review",
+            "isDemo"
+          ],
           "properties": {
-            "analysisType": { "enum": ["QUALITY", "ADULTERATION"] },
-            "batchId": { "bsonType": "int", "minimum": 1 },
-            "batchCode": { "bsonType": "string", "pattern": "^HC-[0-9]{4}-[0-9]{6}$" },
-            "labReportId": { "bsonType": "int", "minimum": 1 },
-            "spectralScanId": { "bsonType": ["objectId", "null"] },
-            "inputSnapshot": { "bsonType": "object", "description": "Exact features sent to the model (or that would have been sent)" },
+            "analysisType": {
+              "enum": [
+                "QUALITY",
+                "ADULTERATION",
+                "LAB_ANALYSIS"
+              ]
+            },
+            "batchId": {
+              "bsonType": "int",
+              "minimum": 1
+            },
+            "batchCode": {
+              "bsonType": "string",
+              "pattern": "^HC-[0-9]{4}-[0-9]{6}$"
+            },
+            "labReportId": {
+              "bsonType": "int",
+              "minimum": 1
+            },
+            "spectralScanId": {
+              "bsonType": [
+                "objectId",
+                "null"
+              ]
+            },
+            "inputSnapshot": {
+              "bsonType": "object",
+              "description": "Exact features sent to the model (or that would have been sent)"
+            },
             "standardsScreening": {
               "bsonType": "object",
-              "required": ["kind", "standard", "checks"],
+              "required": [
+                "kind",
+                "standard",
+                "checks"
+              ],
               "properties": {
-                "kind": { "enum": ["RULE_BASED"] },
-                "standard": { "bsonType": "string" },
+                "kind": {
+                  "enum": [
+                    "RULE_BASED"
+                  ]
+                },
+                "standard": {
+                  "bsonType": "string"
+                },
                 "checks": {
                   "bsonType": "array",
                   "items": {
                     "bsonType": "object",
-                    "required": ["parameter", "limit", "outcome"],
+                    "required": [
+                      "parameter",
+                      "limit",
+                      "outcome"
+                    ],
                     "properties": {
-                      "parameter": { "bsonType": "string" },
-                      "value": { "bsonType": ["number", "null"] },
-                      "limit": { "bsonType": "string" },
-                      "unit": { "bsonType": "string" },
-                      "outcome": { "enum": ["WITHIN_LIMIT", "EXCEEDS_LIMIT", "NOT_MEASURED"] }
+                      "parameter": {
+                        "bsonType": "string"
+                      },
+                      "value": {
+                        "bsonType": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "limit": {
+                        "bsonType": "string"
+                      },
+                      "unit": {
+                        "bsonType": "string"
+                      },
+                      "outcome": {
+                        "enum": [
+                          "WITHIN_LIMIT",
+                          "EXCEEDS_LIMIT",
+                          "NOT_MEASURED",
+                          "PASS",
+                          "FAIL",
+                          "NOT_PROVIDED",
+                          "IMPLAUSIBLE",
+                          "NOT_APPLICABLE"
+                        ]
+                      }
                     }
                   }
                 }
@@ -39,197 +110,610 @@
             },
             "model": {
               "bsonType": "object",
-              "required": ["name", "status"],
+              "required": [
+                "name",
+                "status"
+              ],
               "properties": {
-                "name": { "bsonType": "string" },
-                "version": { "bsonType": ["string", "null"] },
-                "status": { "enum": ["TRAINED", "NOT_TRAINED", "INPUT_UNAVAILABLE", "INPUT_INCOMPATIBLE", "SERVICE_UNAVAILABLE"] },
-                "statusReason": { "bsonType": ["string", "null"] },
-                "datasetId": { "bsonType": ["string", "null"] },
-                "task": { "enum": ["classification", "regression", null] }
+                "name": {
+                  "bsonType": "string"
+                },
+                "version": {
+                  "bsonType": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "status": {
+                  "enum": [
+                    "TRAINED",
+                    "NOT_TRAINED",
+                    "INPUT_UNAVAILABLE",
+                    "INPUT_INCOMPATIBLE",
+                    "SERVICE_UNAVAILABLE",
+                    "NOT_AVAILABLE"
+                  ]
+                },
+                "statusReason": {
+                  "bsonType": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "datasetId": {
+                  "bsonType": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "task": {
+                  "enum": [
+                    "classification",
+                    "regression",
+                    null
+                  ]
+                }
               }
             },
             "prediction": {
-              "bsonType": ["object", "null"],
+              "bsonType": [
+                "object",
+                "null"
+              ],
               "description": "null unless model.status == TRAINED. Never filled with a placeholder.",
               "properties": {
-                "label": { "bsonType": ["string", "null"] },
-                "value": { "bsonType": ["number", "null"] },
-                "unit": { "bsonType": ["string", "null"] },
-                "probabilities": { "bsonType": ["object", "null"] },
-                "confidence": { "bsonType": ["number", "null"], "minimum": 0, "maximum": 1 }
+                "label": {
+                  "bsonType": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "value": {
+                  "bsonType": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "unit": {
+                  "bsonType": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "probabilities": {
+                  "bsonType": [
+                    "object",
+                    "null"
+                  ]
+                },
+                "confidence": {
+                  "bsonType": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": 0,
+                  "maximum": 1
+                }
               }
             },
-            "warnings": { "bsonType": "array", "items": { "bsonType": "string" } },
-            "disclaimer": { "bsonType": "string" },
-            "requestedBy": { "bsonType": "int" },
-            "createdAt": { "bsonType": "date" },
+            "warnings": {
+              "bsonType": "array",
+              "items": {
+                "bsonType": "string"
+              }
+            },
+            "disclaimer": {
+              "bsonType": "string"
+            },
+            "requestedBy": {
+              "bsonType": "int"
+            },
+            "createdAt": {
+              "bsonType": "date"
+            },
             "review": {
               "bsonType": "object",
-              "required": ["status"],
+              "required": [
+                "status"
+              ],
               "properties": {
-                "status": { "enum": ["UNREVIEWED", "REVIEWED"] },
-                "reviewedBy": { "bsonType": ["int", "null"] },
-                "reviewedAt": { "bsonType": ["date", "null"] },
-                "note": { "bsonType": ["string", "null"] }
+                "status": {
+                  "enum": [
+                    "UNREVIEWED",
+                    "REVIEWED"
+                  ]
+                },
+                "reviewedBy": {
+                  "bsonType": [
+                    "int",
+                    "null"
+                  ]
+                },
+                "reviewedAt": {
+                  "bsonType": [
+                    "date",
+                    "null"
+                  ]
+                },
+                "note": {
+                  "bsonType": [
+                    "string",
+                    "null"
+                  ]
+                }
               }
             },
-            "isDemo": { "bsonType": "bool" }
+            "isDemo": {
+              "bsonType": "bool"
+            },
+            "analysisCode": {
+              "bsonType": "string",
+              "description": "LAB_ANALYSIS: PostgreSQL lab_report_analyses.analysis_code"
+            },
+            "pgAnalysisId": {
+              "bsonType": "int",
+              "minimum": 1
+            },
+            "labReportCode": {
+              "bsonType": "string"
+            },
+            "report": {
+              "bsonType": "object",
+              "description": "LAB_ANALYSIS: complete combined report (standards check, ML block, warnings, recommendations)"
+            }
           }
         }
       },
       "indexes": [
-        { "keys": { "batchId": 1, "createdAt": -1 }, "name": "batch_recent" },
-        { "keys": { "labReportId": 1, "analysisType": 1, "createdAt": -1 }, "name": "report_type_recent" },
-        { "keys": { "review.status": 1 }, "name": "review_status" }
+        {
+          "keys": {
+            "batchId": 1,
+            "createdAt": -1
+          },
+          "name": "batch_recent"
+        },
+        {
+          "keys": {
+            "labReportId": 1,
+            "analysisType": 1,
+            "createdAt": -1
+          },
+          "name": "report_type_recent"
+        },
+        {
+          "keys": {
+            "review.status": 1
+          },
+          "name": "review_status"
+        },
+        {
+          "keys": {
+            "analysisCode": 1
+          },
+          "name": "analysis_code",
+          "unique": true,
+          "partialFilterExpression": {
+            "analysisType": "LAB_ANALYSIS"
+          }
+        }
       ]
     },
-
     "spectral_scans": {
       "purpose": "Hyperspectral feature vectors uploaded by a lab for the adulteration model. Arrays of floats per acquisition are natural documents; in SQL they would need an awkward wide table or one row per band.",
       "validator": {
         "$jsonSchema": {
           "bsonType": "object",
-          "required": ["batchId", "batchCode", "labReportId", "uploadedBy", "bandCount", "acquisitions", "sourceFile", "createdAt", "isDemo"],
+          "required": [
+            "batchId",
+            "batchCode",
+            "labReportId",
+            "uploadedBy",
+            "bandCount",
+            "acquisitions",
+            "sourceFile",
+            "createdAt",
+            "isDemo"
+          ],
           "properties": {
-            "batchId": { "bsonType": "int" },
-            "batchCode": { "bsonType": "string" },
-            "labReportId": { "bsonType": "int" },
-            "uploadedBy": { "bsonType": "int" },
-            "instrument": { "bsonType": ["string", "null"] },
-            "preprocessing": { "bsonType": ["string", "null"], "description": "Must match the model manifest's expected preprocessing" },
-            "bandCount": { "bsonType": "int", "minimum": 1 },
-            "wavelengthsNm": { "bsonType": ["array", "null"], "items": { "bsonType": "number" } },
+            "batchId": {
+              "bsonType": "int"
+            },
+            "batchCode": {
+              "bsonType": "string"
+            },
+            "labReportId": {
+              "bsonType": "int"
+            },
+            "uploadedBy": {
+              "bsonType": "int"
+            },
+            "instrument": {
+              "bsonType": [
+                "string",
+                "null"
+              ]
+            },
+            "preprocessing": {
+              "bsonType": [
+                "string",
+                "null"
+              ],
+              "description": "Must match the model manifest's expected preprocessing"
+            },
+            "bandCount": {
+              "bsonType": "int",
+              "minimum": 1
+            },
+            "wavelengthsNm": {
+              "bsonType": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "bsonType": "number"
+              }
+            },
             "acquisitions": {
               "bsonType": "array",
               "minItems": 1,
               "items": {
                 "bsonType": "object",
-                "required": ["acquisitionNo", "values"],
+                "required": [
+                  "acquisitionNo",
+                  "values"
+                ],
                 "properties": {
-                  "acquisitionNo": { "bsonType": "int" },
-                  "values": { "bsonType": "array", "items": { "bsonType": "number" } }
+                  "acquisitionNo": {
+                    "bsonType": "int"
+                  },
+                  "values": {
+                    "bsonType": "array",
+                    "items": {
+                      "bsonType": "number"
+                    }
+                  }
                 }
               }
             },
             "sourceFile": {
               "bsonType": "object",
-              "required": ["name", "sha256"],
+              "required": [
+                "name",
+                "sha256"
+              ],
               "properties": {
-                "name": { "bsonType": "string" },
-                "sha256": { "bsonType": "string", "pattern": "^[0-9a-f]{64}$" }
+                "name": {
+                  "bsonType": "string"
+                },
+                "sha256": {
+                  "bsonType": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
               }
             },
-            "createdAt": { "bsonType": "date" },
-            "isDemo": { "bsonType": "bool" }
+            "createdAt": {
+              "bsonType": "date"
+            },
+            "isDemo": {
+              "bsonType": "bool"
+            }
           }
         }
       },
       "indexes": [
-        { "keys": { "labReportId": 1 }, "name": "by_report" },
-        { "keys": { "sourceFile.sha256": 1 }, "name": "file_hash", "unique": true }
+        {
+          "keys": {
+            "labReportId": 1
+          },
+          "name": "by_report"
+        },
+        {
+          "keys": {
+            "sourceFile.sha256": 1
+          },
+          "name": "file_hash",
+          "unique": true
+        }
       ]
     },
-
     "anomaly_reports": {
       "purpose": "Results of a supply-chain consistency scan. Rule findings and ML findings are stored in SEPARATE fields so rules are never presented as AI.",
       "validator": {
         "$jsonSchema": {
           "bsonType": "object",
-          "required": ["runId", "scope", "ruleFindings", "mlFindings", "status", "createdAt", "updatedAt", "containsDemoData"],
+          "required": [
+            "runId",
+            "scope",
+            "ruleFindings",
+            "mlFindings",
+            "status",
+            "createdAt",
+            "updatedAt",
+            "containsDemoData"
+          ],
           "properties": {
-            "runId": { "bsonType": "string" },
-            "scope": { "enum": ["BATCH", "SYSTEM"] },
-            "batchId": { "bsonType": ["int", "null"] },
-            "batchCode": { "bsonType": ["string", "null"] },
+            "runId": {
+              "bsonType": "string"
+            },
+            "scope": {
+              "enum": [
+                "BATCH",
+                "SYSTEM"
+              ]
+            },
+            "batchId": {
+              "bsonType": [
+                "int",
+                "null"
+              ]
+            },
+            "batchCode": {
+              "bsonType": [
+                "string",
+                "null"
+              ]
+            },
             "ruleFindings": {
               "bsonType": "array",
               "items": {
                 "bsonType": "object",
-                "required": ["kind", "ruleId", "severity", "message"],
+                "required": [
+                  "kind",
+                  "ruleId",
+                  "severity",
+                  "message"
+                ],
                 "properties": {
-                  "kind": { "enum": ["RULE_BASED"] },
-                  "ruleId": { "bsonType": "string" },
-                  "severity": { "enum": ["INFO", "WARNING", "CRITICAL"] },
-                  "message": { "bsonType": "string" },
-                  "evidence": { "bsonType": "object" }
+                  "kind": {
+                    "enum": [
+                      "RULE_BASED"
+                    ]
+                  },
+                  "ruleId": {
+                    "bsonType": "string"
+                  },
+                  "severity": {
+                    "enum": [
+                      "INFO",
+                      "WARNING",
+                      "CRITICAL"
+                    ]
+                  },
+                  "message": {
+                    "bsonType": "string"
+                  },
+                  "evidence": {
+                    "bsonType": "object"
+                  }
                 }
               }
             },
             "mlFindings": {
               "bsonType": "object",
-              "required": ["kind", "status"],
+              "required": [
+                "kind",
+                "status"
+              ],
               "properties": {
-                "kind": { "enum": ["ML_ISOLATION_FOREST"] },
-                "status": { "enum": ["SCORED", "INSUFFICIENT_DATA", "NOT_RUN", "SERVICE_UNAVAILABLE"] },
-                "recordCount": { "bsonType": ["int", "null"] },
-                "minimumRequired": { "bsonType": ["int", "null"] },
-                "anomalyScore": { "bsonType": ["number", "null"] },
-                "isOutlier": { "bsonType": ["bool", "null"] },
-                "modelVersion": { "bsonType": ["string", "null"] }
+                "kind": {
+                  "enum": [
+                    "ML_ISOLATION_FOREST"
+                  ]
+                },
+                "status": {
+                  "enum": [
+                    "SCORED",
+                    "INSUFFICIENT_DATA",
+                    "NOT_RUN",
+                    "SERVICE_UNAVAILABLE"
+                  ]
+                },
+                "recordCount": {
+                  "bsonType": [
+                    "int",
+                    "null"
+                  ]
+                },
+                "minimumRequired": {
+                  "bsonType": [
+                    "int",
+                    "null"
+                  ]
+                },
+                "anomalyScore": {
+                  "bsonType": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "isOutlier": {
+                  "bsonType": [
+                    "bool",
+                    "null"
+                  ]
+                },
+                "modelVersion": {
+                  "bsonType": [
+                    "string",
+                    "null"
+                  ]
+                }
               }
             },
-            "status": { "enum": ["OPEN", "ACKNOWLEDGED", "RESOLVED", "DISMISSED"] },
+            "status": {
+              "enum": [
+                "OPEN",
+                "ACKNOWLEDGED",
+                "RESOLVED",
+                "DISMISSED"
+              ]
+            },
             "resolution": {
-              "bsonType": ["object", "null"],
+              "bsonType": [
+                "object",
+                "null"
+              ],
               "properties": {
-                "by": { "bsonType": "int" },
-                "at": { "bsonType": "date" },
-                "note": { "bsonType": "string" }
+                "by": {
+                  "bsonType": "int"
+                },
+                "at": {
+                  "bsonType": "date"
+                },
+                "note": {
+                  "bsonType": "string"
+                }
               }
             },
-            "createdAt": { "bsonType": "date" },
-            "updatedAt": { "bsonType": "date" },
-            "containsDemoData": { "bsonType": "bool" }
+            "createdAt": {
+              "bsonType": "date"
+            },
+            "updatedAt": {
+              "bsonType": "date"
+            },
+            "containsDemoData": {
+              "bsonType": "bool"
+            }
           }
         }
       },
       "indexes": [
-        { "keys": { "status": 1, "createdAt": -1 }, "name": "status_recent" },
-        { "keys": { "batchId": 1, "createdAt": -1 }, "name": "batch_recent" },
-        { "keys": { "ruleFindings.ruleId": 1 }, "name": "rule_id" }
+        {
+          "keys": {
+            "status": 1,
+            "createdAt": -1
+          },
+          "name": "status_recent"
+        },
+        {
+          "keys": {
+            "batchId": 1,
+            "createdAt": -1
+          },
+          "name": "batch_recent"
+        },
+        {
+          "keys": {
+            "ruleFindings.ruleId": 1
+          },
+          "name": "rule_id"
+        }
       ]
     },
-
     "activity_logs": {
       "purpose": "Application audit trail (logins, denied access, create/submit actions, public QR scans). High-volume, append-mostly, varied 'details' shape.",
       "validator": {
         "$jsonSchema": {
           "bsonType": "object",
-          "required": ["at", "action", "outcome"],
+          "required": [
+            "at",
+            "action",
+            "outcome"
+          ],
           "properties": {
-            "at": { "bsonType": "date" },
+            "at": {
+              "bsonType": "date"
+            },
             "actor": {
-              "bsonType": ["object", "null"],
+              "bsonType": [
+                "object",
+                "null"
+              ],
               "properties": {
-                "userId": { "bsonType": "int" },
-                "role": { "enum": ["ADMIN", "BEEKEEPER", "LAB", "PROCESSOR", "DISTRIBUTOR"] }
+                "userId": {
+                  "bsonType": "int"
+                },
+                "role": {
+                  "enum": [
+                    "ADMIN",
+                    "BEEKEEPER",
+                    "LAB_TESTER",
+                    "PROCESSOR",
+                    "DISTRIBUTOR",
+                    "CONSUMER",
+                    "LAB"
+                  ],
+                  "description": "LAB = legacy role name kept so old audit entries stay valid"
+                }
               }
             },
-            "action": { "bsonType": "string", "pattern": "^[A-Z_]+$" },
+            "action": {
+              "bsonType": "string",
+              "pattern": "^[A-Z_]+$"
+            },
             "entity": {
-              "bsonType": ["object", "null"],
+              "bsonType": [
+                "object",
+                "null"
+              ],
               "properties": {
-                "type": { "bsonType": "string" },
-                "id": { "bsonType": ["int", "string"] },
-                "code": { "bsonType": ["string", "null"] }
+                "type": {
+                  "bsonType": "string"
+                },
+                "id": {
+                  "bsonType": [
+                    "int",
+                    "string"
+                  ]
+                },
+                "code": {
+                  "bsonType": [
+                    "string",
+                    "null"
+                  ]
+                }
               }
             },
-            "outcome": { "enum": ["SUCCESS", "DENIED", "FAILED"] },
-            "ip": { "bsonType": ["string", "null"] },
-            "details": { "bsonType": "object" }
+            "outcome": {
+              "enum": [
+                "SUCCESS",
+                "DENIED",
+                "FAILED"
+              ]
+            },
+            "ip": {
+              "bsonType": [
+                "string",
+                "null"
+              ]
+            },
+            "details": {
+              "bsonType": "object"
+            }
           }
         }
       },
       "indexes": [
-        { "keys": { "at": -1 }, "name": "recent" },
-        { "keys": { "actor.userId": 1, "at": -1 }, "name": "by_user" },
-        { "keys": { "entity.type": 1, "entity.id": 1, "at": -1 }, "name": "by_entity" },
         {
-          "keys": { "at": 1 },
+          "keys": {
+            "at": -1
+          },
+          "name": "recent"
+        },
+        {
+          "keys": {
+            "actor.userId": 1,
+            "at": -1
+          },
+          "name": "by_user"
+        },
+        {
+          "keys": {
+            "entity.type": 1,
+            "entity.id": 1,
+            "at": -1
+          },
+          "name": "by_entity"
+        },
+        {
+          "keys": {
+            "at": 1
+          },
           "name": "public_scan_ttl",
           "expireAfterSeconds": 7776000,
-          "partialFilterExpression": { "action": "PUBLIC_QR_SCAN" },
+          "partialFilterExpression": {
+            "action": "PUBLIC_QR_SCAN"
+          },
           "_comment": "TTL: anonymous scan logs auto-expire after 90 days; audit entries for real actions are kept."
         }
       ]

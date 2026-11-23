@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { post, qs } from '../../api/client.js';
-import { Alert, Async, Badge, Card, ErrorBox, PageHeader, Pager, Table, useAction, useApi, fmtDateTime, short } from '../../components/ui.jsx';
+import { Alert, Async, Badge, Card, ErrorBox, PageHeader, Pager, Table, useAction, useApi, fmtDateTime, short, useBase } from '../../components/ui.jsx';
 
 export default function Blockchain() {
+  const base = useBase();
   const st = useApi('/blockchain/status');
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState('');
@@ -51,7 +52,7 @@ export default function Blockchain() {
               {meta?.unanchored > 0 && <Alert kind="warn">{meta.unanchored} eligible record(s) have no anchor on the current contract.</Alert>}
               <Table rows={rows} rowKey={(r) => r.anchor_id} columns={[
                 { label: '#', key: 'anchor_id' },
-                { label: 'Batch', render: (r) => <Link to={`/app/batches/${r.batch_code}`}>{r.batch_code}</Link> },
+                { label: 'Batch', render: (r) => <Link to={base(`batches/${r.batch_code}`)}>{r.batch_code}</Link> },
                 { label: 'Record', render: (r) => <>{r.entity_type.replaceAll('_', ' ')}<br /><small>{r.entity_code}</small></> },
                 { label: 'Hash', render: (r) => <code title={r.record_hash}>{short(r.record_hash, 8)}</code> },
                 { label: 'Status', render: (r) => <Badge value={r.anchor_status} /> },

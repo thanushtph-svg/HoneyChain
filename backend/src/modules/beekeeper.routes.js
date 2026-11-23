@@ -1,4 +1,4 @@
-// Beekeeper: profile, hives, harvests, batch creation, lab assignment.
+// Beekeeper: profile, hives, harvests, batch creation / splitting (transfers are in transfers.routes.js).
 import { Router } from 'express';
 import { z } from 'zod';
 import { query, one, withTransaction } from '../db/pg.js';
@@ -11,7 +11,7 @@ import { createPendingAnchor } from '../services/anchorService.js';
 import { env } from '../config/env.js';
 
 const r = Router();
-r.use(['/beekeeper', '/hives', '/harvests', '/labs', '/batches'], requireAuth);
+r.use(['/beekeeper', '/hives', '/harvests'], requireAuth);
 
 // ---------------------------------------------------------------- profile
 r.get('/beekeeper/profile', requireRole('BEEKEEPER'), async (req, res) => {
@@ -170,8 +170,8 @@ async function ownHarvest(user, harvestCode) {
 r.get('/harvests/:harvestCode', requireRole('BEEKEEPER', 'ADMIN'), async (req, res) => {
   const h = await ownHarvest(req.user, req.params.harvestCode);
   const { rows: batches } = await query(
-    `SELECT b.batch_code, b.quantity_kg, b.honey_type, b.status, b.created_at, o.name AS assigned_lab_name
-       FROM batches b LEFT JOIN organizations o ON o.org_id = b.assigned_lab_id
+    `SELECT b.batch_code, b.quantity_kg, b.honey_type, b.status, b.created_at, o.name AS processor_name
+       FROM batches b LEFT JOIN organizations o ON o.org_id = batch_processor_org(b.batch_id)
       WHERE b.harvest_id = $1 ORDER BY b.batch_id`, [h.harvest_id]);
   const batched = batches.reduce((s, b) => s + Number(b.quantity_kg), 0);
   ok(res, { ...h, batches, batched_kg: batched.toFixed(2), remaining_kg: (Number(h.quantity_kg) - batched).toFixed(2) });
@@ -183,7 +183,6 @@ r.post(
   requireRole('BEEKEEPER'),
   validateBody(z.object({
     batches: z.array(z.object({ quantityKg: decimal(0.01, 500), honeyType: text(80) })).min(1).max(20),
-    labOrgId: z.number().int().positive().optional(),
   })),
   async (req, res) => {
     const h = await ownHarvest(req.user, req.params.harvestCode);
@@ -192,9 +191,9 @@ r.post(
       const out = [];
       for (const b of req.valid.batches) {
         const row = (await c.query(
-          `INSERT INTO batches (harvest_id, quantity_kg, honey_type, created_by, assigned_lab_id)
-           VALUES ($1,$2,$3,$4,$5) RETURNING batch_id, batch_code, quantity_kg, honey_type, status`,
-          [h.harvest_id, b.quantityKg, b.honeyType, req.user.id, req.valid.labOrgId ?? null])).rows[0];
+          `INSERT INTO batches (harvest_id, quantity_kg, honey_type, created_by)
+           VALUES ($1,$2,$3,$4) RETURNING batch_id, batch_code, quantity_kg, honey_type, status`,
+          [h.harvest_id, b.quantityKg, b.honeyType, req.user.id])).rows[0];
         const url = `${env.PUBLIC_BASE_URL.replace(/\/$/, '')}/verify/${row.batch_code}`;
         await c.query('INSERT INTO qr_records (batch_id, public_url, generated_by) VALUES ($1,$2,$3)', [row.batch_id, url, req.user.id]);
         const anchor = await createPendingAnchor(c, { entity_type: 'BATCH_ORIGIN', batch_id: row.batch_id }, req.user.id);
@@ -208,29 +207,5 @@ r.post(
     created(res, createdBatches);
   },
 );
-
-r.post(
-  '/batches/:batchCode/assign-lab',
-  requireRole('BEEKEEPER'),
-  validateBody(z.object({ labOrgId: z.number().int().positive() })),
-  async (req, res) => {
-    const b = await one(
-      `SELECT b.batch_id, b.batch_code, b.status FROM batches b JOIN harvests h ON h.harvest_id = b.harvest_id
-         JOIN hives hv ON hv.hive_id = h.hive_id WHERE b.batch_code = $1 AND hv.beekeeper_id = $2`,
-      [req.params.batchCode.toUpperCase(), req.user.beekeeperId]);
-    if (!b) throw notFound('Batch');
-    if (b.status !== 'CREATED') throw conflict('BATCH_LOCKED', 'The laboratory can only be changed before testing starts');
-    await withTransaction(req.user.id, (c) => c.query('UPDATE batches SET assigned_lab_id = $2 WHERE batch_id = $1', [b.batch_id, req.valid.labOrgId]));
-    await logActivity(req, 'BATCH_ASSIGNED_TO_LAB', { type: 'batch', id: b.batch_id, code: b.batch_code }, 'SUCCESS', { labOrgId: req.valid.labOrgId });
-    ok(res, { batchCode: b.batch_code, labOrgId: req.valid.labOrgId });
-  },
-);
-
-r.get('/labs', requireRole('BEEKEEPER', 'ADMIN'), async (_req, res) => {
-  const { rows } = await query(
-    `SELECT org_id, org_code, name, city, state, accreditation_no FROM organizations
-      WHERE org_type = 'LABORATORY' AND is_active ORDER BY name`);
-  ok(res, rows);
-});
 
 export default r;

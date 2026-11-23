@@ -175,3 +175,56 @@ tr:hover td { background: #fffcf5; }
   .hero { padding: 24px; }
   .hero h1 { font-size: 1.5rem; }
 }
+
+/* ---------- six role views ---------- */
+.role-chip { margin: -10px 6px 14px; padding: 5px 10px; border-radius: 999px; background: rgba(217, 138, 11, 0.18); color: #f6c46a; font-size: 0.74rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; display: inline-block; }
+.forbidden h1 { color: var(--bad); }
+.search { padding: 7px 10px; border-radius: 9px; border: 1px solid var(--line); font: inherit; min-width: 200px; }
+.span-2 { grid-column: 1 / -1; }
+.action-card { border-color: var(--honey-200); background: var(--honey-50); }
+.inline-form { display: grid; gap: 6px; min-width: 240px; max-width: 420px; }
+.inline-form textarea, .inline-form input, .inline-form select { padding: 6px 8px; border: 1px solid #d9cfbd; border-radius: 8px; font: inherit; font-size: 0.85rem; }
+.inline-form textarea { min-height: 56px; }
+.inline-form .alert { margin: 0; }
+.alert .inline-form { margin-top: 8px; }
+.confirm-wrap { display: inline-flex; flex-direction: column; gap: 3px; }
+.inline-error { color: var(--bad); font-size: 0.76rem; max-width: 220px; }
+.verdict { font-size: 0.95rem; }
+.verdict > div { margin: 4px 0; }
+.legend { display: grid; gap: 6px; font-size: 0.88rem; margin-bottom: 12px; }
+.screening { border-top: 1px dashed var(--line); padding-top: 10px; }
+.matrix td.center, .matrix th { text-align: center; }
+.matrix td:first-child, .matrix th:first-child { text-align: left; }
+.qr-card img { width: 100%; max-width: 200px; display: block; margin: 0 auto; border: 1px solid var(--line); border-radius: 10px; }
+.qr-card .card-head { margin-bottom: 8px; }
+.qr-card .hint { font-size: 0.75rem; color: var(--warn); }
+.stat.selected { border-color: var(--honey-500); box-shadow: 0 0 0 2px var(--honey-100); }
+.public-links { display: flex; gap: 16px; }
+.verify-embedded { max-width: 980px; }
+.scanner-view { position: relative; background: #1f1a12; border-radius: 14px; overflow: hidden; aspect-ratio: 4 / 3; max-width: 420px; }
+.scanner-view video { width: 100%; height: 100%; object-fit: cover; display: none; }
+.scanner-view.on video { display: block; }
+.scanner-view.on::after { content: ''; position: absolute; inset: 18%; border: 3px solid var(--honey-400); border-radius: 12px; box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.25); }
+.scanner-placeholder { position: absolute; inset: 0; display: grid; place-items: center; color: #e9dcc3; padding: 20px; text-align: center; font-size: 0.9rem; }
+@media (max-width: 760px) {
+  .span-2 { grid-column: auto; }
+  .search { min-width: 0; width: 100%; }
+  .inline-form { min-width: 0; }
+  .scanner-view { max-width: none; }
+}
+
+/* lab measurements with units; automatic lab outcome; processing method cards */
+.input-unit { display: flex; align-items: stretch; }
+.input-unit input { flex: 1; min-width: 0; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.input-unit .unit { display: flex; align-items: center; padding: 0 10px; border: 1px solid var(--line); border-left: 0; border-radius: 0 8px 8px 0; background: #faf7f0; color: var(--muted); font-size: 0.82rem; white-space: nowrap; }
+.outcome { border-radius: 12px; padding: 12px 16px; margin-bottom: 12px; border: 1px solid var(--line); background: #faf7f0; }
+.outcome-value { font-size: 1.6rem; font-weight: 800; letter-spacing: 0.02em; }
+.outcome-pass { background: var(--ok-bg); border-color: #bfe3cd; color: var(--ok); }
+.outcome-fail { background: var(--bad-bg); border-color: #f5c6c1; color: var(--bad); }
+.outcome-incomplete, .outcome-analysis_error { background: var(--warn-bg); border-color: #f3d79f; color: var(--warn); }
+.method-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.method-card { border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: #fff; display: flex; flex-direction: column; gap: 6px; }
+.method-card.active { border-color: var(--honey-700, #b7791f); box-shadow: 0 0 0 2px rgba(183, 121, 31, 0.15); }
+.method-card h3 { margin: 0; font-size: 1rem; }
+.method-card p { margin: 0; font-size: 0.83rem; color: var(--muted); }
+@media (max-width: 640px) { .method-grid { grid-template-columns: 1fr; } .outcome-value { font-size: 1.3rem; } }

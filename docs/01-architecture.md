@@ -1,5 +1,8 @@
 # 01 — System Architecture
 
+> **Six-role update:** see [10-role-based-views.md](10-role-based-views.md) for the six views, the custody workflow and the four RBAC layers. Role `LAB` below is now `LAB_TESTER`.
+
+
 ## 1. One application, five services
 
 ```
